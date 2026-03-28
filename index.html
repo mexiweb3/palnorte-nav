@@ -910,6 +910,12 @@ init3D();
 // 3D SCENE
 // ══════════════════════════════════════════
 let scene, camera, renderer, threeInited = false;
+let groundMeshRef = null;
+let originalTexture = null;
+const meshToName = new Map();
+const nameToMesh = new Map();
+const nameToWireframe = new Map();
+const nameToSprite = new Map();
 let camAngle = Math.PI / 4, camPitch = Math.PI / 5, camDist = 120;
 let gpsMarker3D = null;
 
@@ -1174,7 +1180,6 @@ function init3D() {
   // ── Raycaster for tooltips ──
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
-  const meshToName = new Map();
 
   // Store mesh references
   scene.children.forEach(child => {
@@ -1501,9 +1506,6 @@ let editMode = false;
 let selectedMesh = null;
 let isDragging = false;
 let dragPlane = null;
-const nameToMesh = new Map();
-const nameToWireframe = new Map();
-const nameToSprite = new Map();
 
 function toggleEditMode() {
   editMode = !editMode;
@@ -1648,8 +1650,6 @@ function loadLayout() {
 // MAP LAYER TOGGLE (satellite from OSM/Esri)
 // ══════════════════════════════════════════
 let mapLayerMode = 0; // 0=palnorte, 1=satellite, 2=off
-let groundMeshRef = null;
-let originalTexture = null;
 let satTexture = null;
 
 function toggleMapLayer() {

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'palnorte-v5';
+const CACHE_NAME = 'palnorte-v6';
 const ASSETS = [
   './',
   './index.html',
