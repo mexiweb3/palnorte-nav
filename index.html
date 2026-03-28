@@ -278,6 +278,24 @@ body {
 .legend-dot {
   width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0;
 }
+.edit-hud {
+  position: fixed; bottom: 70px; left: 12px; right: 12px;
+  background: rgba(10,10,10,0.95); border: 1px solid #ffaa00;
+  border-radius: 12px; padding: 10px 14px; z-index: 95;
+  backdrop-filter: blur(8px);
+}
+.edit-selected {
+  font-size: 13px; color: #ffaa00; margin-bottom: 8px; text-align: center;
+}
+.edit-actions {
+  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+}
+.edit-btn {
+  background: #222; border: 1px solid #444; color: #fff;
+  padding: 8px 16px; border-radius: 8px; font-size: 13px;
+  cursor: pointer; font-weight: 600;
+}
+.edit-btn:active { background: #ffaa00; color: #000; }
 .three-tooltip {
   position: fixed; z-index: 95;
   background: rgba(10,10,10,0.95); border: 1px solid #00e5ff;
@@ -327,10 +345,22 @@ body {
     <p id="tt-info"></p>
   </div>
   <div class="three-controls">
+    <button class="three-btn" id="btn-edit" onclick="toggleEditMode()">✏️</button>
     <button class="three-btn" id="btn-mode" onclick="toggleNavMode()">🚶</button>
     <button class="three-btn" onclick="resetCamera()">🏠</button>
     <button class="three-btn" onclick="topView()">⬆</button>
     <button class="three-btn" onclick="locateIn3D()">📍</button>
+    <button class="three-btn" id="btn-save" onclick="saveLayout()" style="display:none">💾</button>
+    <button class="three-btn" id="btn-layer" onclick="toggleMapLayer()">🗺</button>
+  </div>
+  <div class="edit-hud" id="edit-hud" style="display:none">
+    <div class="edit-selected" id="edit-selected">Toca un cubo para seleccionarlo</div>
+    <div class="edit-actions" id="edit-actions" style="display:none">
+      <button class="edit-btn" onclick="resizeSelected(1.1)">+</button>
+      <button class="edit-btn" onclick="resizeSelected(0.9)">−</button>
+      <button class="edit-btn" onclick="taller(1.2)">↑ Alto</button>
+      <button class="edit-btn" onclick="taller(0.8)">↓ Alto</button>
+    </div>
   </div>
 </div>
 
@@ -1036,6 +1066,8 @@ function init3D() {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
+    nameToMesh.set(s.name, mesh);
+    meshToName.set(mesh, s.name);
 
     // Edge glow
     const edges = new THREE.EdgesGeometry(geo);
@@ -1043,6 +1075,7 @@ function init3D() {
     const wireframe = new THREE.LineSegments(edges, lineMat);
     wireframe.position.copy(mesh.position);
     scene.add(wireframe);
+    nameToWireframe.set(s.name, wireframe);
 
     // Label sprite
     const labelCanvas = document.createElement('canvas');
@@ -1058,6 +1091,7 @@ function init3D() {
     sprite.position.set(pos.x, sh + 2, pos.z);
     sprite.scale.set(sw * 1.2, sw * 0.15, 1);
     scene.add(sprite);
+    nameToSprite.set(s.name, sprite);
   });
 
   // Paths between locations (glowing lines on ground)
@@ -1176,7 +1210,39 @@ function init3D() {
 
   canvas.addEventListener('touchstart', (e) => {
     touchMoved = false;
-    if (navMode === 'orbit') {
+    if (editMode) {
+      touchTapTime = Date.now();
+      touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      if (e.touches.length === 1) {
+        // Try to pick a cube
+        const hit = raycast(e.touches[0].clientX, e.touches[0].clientY);
+        if (hit) {
+          // Find the mesh
+          pointer.x = (e.touches[0].clientX / window.innerWidth) * 2 - 1;
+          pointer.y = -(e.touches[0].clientY / window.innerHeight) * 2 + 1;
+          raycaster.setFromCamera(pointer, camera);
+          const intersects = raycaster.intersectObjects(scene.children, false);
+          for (const int of intersects) {
+            if (meshToName.has(int.object)) {
+              selectMesh(int.object);
+              isDragging = true;
+              break;
+            }
+          }
+        } else if (selectedMesh) {
+          // Tapped empty space — start dragging selected to new position
+          isDragging = true;
+        }
+        touchStartAngle = camAngle;
+        touchStartPitch = camPitch;
+      } else if (e.touches.length === 2) {
+        lastTouchDist3D = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        touchStartDist = camDist;
+      }
+    } else if (navMode === 'orbit') {
       if (e.touches.length === 1) {
         touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         touchStartAngle = camAngle;
@@ -1205,7 +1271,25 @@ function init3D() {
 
   canvas.addEventListener('touchmove', (e) => {
     touchMoved = true;
-    if (navMode === 'orbit') {
+    if (editMode) {
+      if (e.touches.length === 1 && isDragging && selectedMesh) {
+        dragMeshTo(e.touches[0].clientX, e.touches[0].clientY);
+      } else if (e.touches.length === 1 && !isDragging) {
+        // Orbit camera in edit mode when not dragging
+        const dx = e.touches[0].clientX - touchStart.x;
+        const dy = e.touches[0].clientY - touchStart.y;
+        camAngle = touchStartAngle - dx * 0.005;
+        camPitch = Math.max(0.05, Math.min(Math.PI / 2.1, touchStartPitch + dy * 0.005));
+        updateCameraPos();
+      } else if (e.touches.length === 2) {
+        const dist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        camDist = Math.max(20, Math.min(250, touchStartDist * (lastTouchDist3D / dist)));
+        updateCameraPos();
+      }
+    } else if (navMode === 'orbit') {
       if (e.touches.length === 1 && touchStart) {
         const dx = e.touches[0].clientX - touchStart.x;
         const dy = e.touches[0].clientY - touchStart.y;
@@ -1236,11 +1320,29 @@ function init3D() {
   }, { passive: true });
 
   canvas.addEventListener('touchend', (e) => {
-    // Tap to show tooltip
-    if (!touchMoved && Date.now() - touchTapTime < 300 && touchStart) {
-      const hit = raycast(touchStart.x, touchStart.y);
-      if (hit) showTooltip(hit.x, hit.y, hit.name);
-      else hideTooltip();
+    if (editMode) {
+      if (!touchMoved && Date.now() - touchTapTime < 300 && touchStart) {
+        const hit = raycast(touchStart.x, touchStart.y);
+        if (hit) {
+          pointer.x = (touchStart.x / window.innerWidth) * 2 - 1;
+          pointer.y = -(touchStart.y / window.innerHeight) * 2 + 1;
+          raycaster.setFromCamera(pointer, camera);
+          const intersects = raycaster.intersectObjects(scene.children, false);
+          for (const int of intersects) {
+            if (meshToName.has(int.object)) { selectMesh(int.object); break; }
+          }
+        } else {
+          deselectMesh();
+        }
+      }
+      isDragging = false;
+    } else {
+      // Tap to show tooltip
+      if (!touchMoved && Date.now() - touchTapTime < 300 && touchStart) {
+        const hit = raycast(touchStart.x, touchStart.y);
+        if (hit) showTooltip(hit.x, hit.y, hit.name);
+        else hideTooltip();
+      }
     }
     touchStart = null;
     walkJoystickActive = false;
@@ -1253,26 +1355,55 @@ function init3D() {
     mouseDown = true; touchMoved = false;
     mouseStartX = e.clientX; mouseStartY = e.clientY;
     mouseStartAngle = camAngle; mouseStartPitch = camPitch;
+    if (editMode && selectedMesh) {
+      const hit = raycast(e.clientX, e.clientY);
+      if (hit && hit.name === meshToName.get(selectedMesh)) {
+        isDragging = true;
+        dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      }
+    }
   });
   canvas.addEventListener('mousemove', (e) => {
     if (mouseDown) {
       touchMoved = true;
-      if (navMode === 'orbit') {
+      if (editMode && isDragging && selectedMesh) {
+        dragMeshTo(e.clientX, e.clientY);
+      } else if (navMode === 'orbit' || editMode) {
         camAngle = mouseStartAngle - (e.clientX - mouseStartX) * 0.005;
         camPitch = Math.max(0.05, Math.min(Math.PI / 2.1, mouseStartPitch + (e.clientY - mouseStartY) * 0.005));
         updateCameraPos();
       }
     }
     // Hover tooltip (desktop)
-    const hit = raycast(e.clientX, e.clientY);
-    if (hit) { showTooltip(hit.x, hit.y, hit.name); canvas.style.cursor = 'pointer'; }
-    else { hideTooltip(); canvas.style.cursor = 'grab'; }
+    if (!editMode) {
+      const hit = raycast(e.clientX, e.clientY);
+      if (hit) { showTooltip(hit.x, hit.y, hit.name); canvas.style.cursor = 'pointer'; }
+      else { hideTooltip(); canvas.style.cursor = 'grab'; }
+    } else {
+      const hit = raycast(e.clientX, e.clientY);
+      canvas.style.cursor = hit ? 'move' : 'crosshair';
+    }
   });
   canvas.addEventListener('mouseup', (e) => {
-    if (!touchMoved) {
-      const hit = raycast(e.clientX, e.clientY);
-      if (hit) showTooltip(hit.x, hit.y, hit.name);
-      else hideTooltip();
+    if (editMode) {
+      if (!touchMoved) {
+        pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+        pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(pointer, camera);
+        const intersects = raycaster.intersectObjects(scene.children, false);
+        let found = false;
+        for (const int of intersects) {
+          if (meshToName.has(int.object)) { selectMesh(int.object); found = true; break; }
+        }
+        if (!found) deselectMesh();
+      }
+      isDragging = false;
+    } else {
+      if (!touchMoved) {
+        const hit = raycast(e.clientX, e.clientY);
+        if (hit) showTooltip(hit.x, hit.y, hit.name);
+        else hideTooltip();
+      }
     }
     mouseDown = false;
   });
@@ -1290,19 +1421,8 @@ function init3D() {
     renderer.setSize(w, h);
   });
 
-  // Remap meshes after scene is built
-  setTimeout(() => {
-    scene.children.forEach(child => {
-      if (child.isMesh && child.geometry && child.geometry.type === 'BoxGeometry') {
-        STRUCTURES.forEach(s => {
-          const p = gpsTo3D(s.lat, s.lng);
-          if (Math.abs(child.position.x - p.x) < 1 && Math.abs(child.position.z - p.z) < 1) {
-            meshToName.set(child, s.name);
-          }
-        });
-      }
-    });
-  }, 100);
+  // Load saved layout if any
+  setTimeout(() => { loadLayout(); }, 200);
 
   // Animate
   function animate() {
@@ -1346,6 +1466,237 @@ function updateCameraPos() {
   camera.position.y = camDist * Math.sin(camPitch);
   camera.position.z = camDist * Math.cos(camAngle) * Math.cos(camPitch);
   camera.lookAt(0, 2, 0);
+}
+
+// ══════════════════════════════════════════
+// EDIT MODE — drag cubes, resize
+// ══════════════════════════════════════════
+let editMode = false;
+let selectedMesh = null;
+let isDragging = false;
+let dragPlane = null;
+const nameToMesh = new Map();
+const nameToWireframe = new Map();
+const nameToSprite = new Map();
+
+function toggleEditMode() {
+  editMode = !editMode;
+  const btn = document.getElementById('btn-edit');
+  const hud = document.getElementById('edit-hud');
+  const saveBtn = document.getElementById('btn-save');
+  const label = document.querySelector('.three-label');
+
+  if (editMode) {
+    btn.style.background = '#ffaa00';
+    btn.style.color = '#000';
+    hud.style.display = 'block';
+    saveBtn.style.display = 'flex';
+    label.textContent = '✏️ Editor — toca para seleccionar, arrastra para mover';
+    // Switch to top view for easier editing
+    topView();
+    // Create ground drag plane
+    dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  } else {
+    btn.style.background = '';
+    btn.style.color = '#fff';
+    hud.style.display = 'none';
+    saveBtn.style.display = 'none';
+    label.textContent = 'Fundidora 3D — arrastra para rotar, pinch para zoom';
+    deselectMesh();
+  }
+}
+
+function selectMesh(mesh) {
+  deselectMesh();
+  selectedMesh = mesh;
+  const name = meshToName.get(mesh);
+  mesh.material.emissive.setHex(0xffaa00);
+  mesh.material.emissiveIntensity = 1;
+  document.getElementById('edit-selected').textContent = name || 'Seleccionado';
+  document.getElementById('edit-actions').style.display = 'flex';
+}
+
+function deselectMesh() {
+  if (selectedMesh) {
+    // Restore original emissive
+    const name = meshToName.get(selectedMesh);
+    const s = STRUCTURES.find(st => st.name === name);
+    if (s) {
+      selectedMesh.material.emissive.setHex(s.emissive);
+      selectedMesh.material.emissiveIntensity = 0.5;
+    }
+    selectedMesh = null;
+  }
+  document.getElementById('edit-selected').textContent = 'Toca un cubo para seleccionarlo';
+  document.getElementById('edit-actions').style.display = 'none';
+}
+
+function resizeSelected(factor) {
+  if (!selectedMesh) return;
+  selectedMesh.scale.x *= factor;
+  selectedMesh.scale.z *= factor;
+  // Update wireframe
+  const name = meshToName.get(selectedMesh);
+  updateWireframe(name, selectedMesh);
+}
+
+function taller(factor) {
+  if (!selectedMesh) return;
+  selectedMesh.scale.y *= factor;
+  selectedMesh.position.y = (selectedMesh.geometry.parameters.height * selectedMesh.scale.y) / 2;
+  const name = meshToName.get(selectedMesh);
+  updateWireframe(name, selectedMesh);
+}
+
+function updateWireframe(name, mesh) {
+  const wf = nameToWireframe.get(name);
+  if (wf) {
+    wf.position.copy(mesh.position);
+    wf.scale.copy(mesh.scale);
+  }
+  const sp = nameToSprite.get(name);
+  if (sp) {
+    sp.position.set(mesh.position.x, mesh.position.y + mesh.geometry.parameters.height * mesh.scale.y / 2 + 2, mesh.position.z);
+  }
+}
+
+function dragMeshTo(clientX, clientY) {
+  if (!selectedMesh || !dragPlane) return;
+  pointer.x = (clientX / window.innerWidth) * 2 - 1;
+  pointer.y = -(clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const target = new THREE.Vector3();
+  raycaster.ray.intersectPlane(dragPlane, target);
+  if (target) {
+    selectedMesh.position.x = target.x;
+    selectedMesh.position.z = target.z;
+    const name = meshToName.get(selectedMesh);
+    updateWireframe(name, selectedMesh);
+  }
+}
+
+function saveLayout() {
+  // Export positions as JSON for easy copy-paste
+  const layout = {};
+  meshToName.forEach((name, mesh) => {
+    layout[name] = {
+      x: +mesh.position.x.toFixed(2),
+      z: +mesh.position.z.toFixed(2),
+      scaleX: +mesh.scale.x.toFixed(2),
+      scaleY: +mesh.scale.y.toFixed(2),
+      scaleZ: +mesh.scale.z.toFixed(2),
+    };
+  });
+  const json = JSON.stringify(layout, null, 2);
+  localStorage.setItem('3d-layout', json);
+
+  // Copy to clipboard
+  navigator.clipboard.writeText(json).then(() => {
+    document.getElementById('edit-selected').textContent = '💾 Layout guardado y copiado al clipboard';
+  }).catch(() => {
+    document.getElementById('edit-selected').textContent = '💾 Layout guardado en localStorage';
+  });
+  console.log('3D Layout:', json);
+}
+
+function loadLayout() {
+  const saved = localStorage.getItem('3d-layout');
+  if (!saved) return;
+  try {
+    const layout = JSON.parse(saved);
+    meshToName.forEach((name, mesh) => {
+      if (layout[name]) {
+        mesh.position.x = layout[name].x;
+        mesh.position.z = layout[name].z;
+        mesh.scale.x = layout[name].scaleX || 1;
+        mesh.scale.y = layout[name].scaleY || 1;
+        mesh.scale.z = layout[name].scaleZ || 1;
+        mesh.position.y = (mesh.geometry.parameters.height * mesh.scale.y) / 2;
+        updateWireframe(name, mesh);
+      }
+    });
+  } catch(e) {}
+}
+
+// ══════════════════════════════════════════
+// MAP LAYER TOGGLE (satellite from OSM/Esri)
+// ══════════════════════════════════════════
+let mapLayerMode = 0; // 0=palnorte, 1=satellite, 2=off
+let groundMeshRef = null;
+let originalTexture = null;
+let satTexture = null;
+
+function toggleMapLayer() {
+  mapLayerMode = (mapLayerMode + 1) % 3;
+  const btn = document.getElementById('btn-layer');
+
+  if (!groundMeshRef) {
+    // Find the ground mesh
+    scene.children.forEach(child => {
+      if (child.isMesh && child.geometry && child.geometry.type === 'PlaneGeometry') {
+        groundMeshRef = child;
+        originalTexture = child.material.map;
+      }
+    });
+  }
+  if (!groundMeshRef) return;
+
+  if (mapLayerMode === 0) {
+    // Pa'l Norte map
+    btn.textContent = '🗺';
+    groundMeshRef.material.map = originalTexture;
+    groundMeshRef.material.opacity = 0.5;
+    groundMeshRef.material.needsUpdate = true;
+    groundMeshRef.visible = true;
+  } else if (mapLayerMode === 1) {
+    // Load satellite/street tiles as a single image from Esri
+    btn.textContent = '🛰';
+    if (satTexture) {
+      groundMeshRef.material.map = satTexture;
+      groundMeshRef.material.opacity = 0.7;
+      groundMeshRef.material.needsUpdate = true;
+    } else {
+      // Use Esri World Imagery tile - zoom 16 covers the area well
+      // Center: 25.678, -100.2846  → tile x,y at zoom 16
+      const zoom = 16;
+      const lat = CENTER_LAT, lng = CENTER_LNG;
+      const n = Math.pow(2, zoom);
+      const tileX = Math.floor((lng + 180) / 360 * n);
+      const latRad = lat * Math.PI / 180;
+      const tileY = Math.floor((1 - Math.log(Math.tan(latRad) + 1/Math.cos(latRad)) / Math.PI) / 2 * n);
+
+      // Load a 3x3 grid of tiles and stitch them
+      const tileCanvas = document.createElement('canvas');
+      tileCanvas.width = 768; tileCanvas.height = 768;
+      const tileCtx = tileCanvas.getContext('2d');
+      let loaded = 0;
+
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${tileY+dy}/${tileX+dx}`;
+          const px = (dx+1) * 256, py = (dy+1) * 256;
+          img.onload = () => {
+            tileCtx.drawImage(img, px, py, 256, 256);
+            loaded++;
+            if (loaded === 9) {
+              satTexture = new THREE.CanvasTexture(tileCanvas);
+              satTexture.repeat.set(1, 1);
+              groundMeshRef.material.map = satTexture;
+              groundMeshRef.material.opacity = 0.7;
+              groundMeshRef.material.needsUpdate = true;
+            }
+          };
+          img.onerror = () => { loaded++; };
+        }
+      }
+    }
+  } else {
+    // Off
+    btn.textContent = '⬛';
+    groundMeshRef.visible = false;
+  }
 }
 
 function toggleNavMode() {
