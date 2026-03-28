@@ -358,6 +358,8 @@ body {
   <div class="three-controls">
     <button class="three-btn" id="btn-edit" onclick="toggleEditMode()" style="background:#ffaa00;color:#000;font-size:22px;border-color:#ffaa00">✏️</button>
     <button class="three-btn" id="btn-mode" onclick="toggleNavMode()">🚶</button>
+    <button class="three-btn" onclick="rotateLeft()">↺</button>
+    <button class="three-btn" onclick="rotateRight()">↻</button>
     <button class="three-btn" onclick="resetCamera()">🏠</button>
     <button class="three-btn" onclick="topView()">⬆</button>
     <button class="three-btn" onclick="locateIn3D()">📍</button>
@@ -919,6 +921,7 @@ const nameToMesh = new Map();
 const nameToWireframe = new Map();
 const nameToSprite = new Map();
 let camAngle = Math.PI / 4, camPitch = Math.PI / 5, camDist = 120;
+let camTargetX = 0, camTargetZ = 0;
 let gpsMarker3D = null;
 
 // Convert GPS to 3D world coords (centered on Fundidora)
@@ -1287,12 +1290,17 @@ function init3D() {
         touchStartAngle = camAngle;
         touchStartPitch = camPitch;
         touchTapTime = Date.now();
+        // Store pan start
+        touchStart.panX = camTargetX;
+        touchStart.panZ = camTargetZ;
       } else if (e.touches.length === 2) {
         lastTouchDist3D = Math.hypot(
           e.touches[0].clientX - e.touches[1].clientX,
           e.touches[0].clientY - e.touches[1].clientY
         );
         touchStartDist = camDist;
+        touchStartAngle = camAngle;
+        touchStartPitch = camPitch;
       }
     } else {
       // Walk mode: left half = joystick (move), right half = look
@@ -1330,17 +1338,24 @@ function init3D() {
       }
     } else if (navMode === 'orbit') {
       if (e.touches.length === 1 && touchStart) {
+        // One finger = PAN (move map without changing angle)
         const dx = e.touches[0].clientX - touchStart.x;
         const dy = e.touches[0].clientY - touchStart.y;
-        camAngle = touchStartAngle - dx * 0.005;
-        camPitch = Math.max(0.05, Math.min(Math.PI / 2.1, touchStartPitch + dy * 0.005));
+        const panSpeed = camDist * 0.002;
+        camTargetX = touchStart.panX - (Math.cos(camAngle) * dx + Math.sin(camAngle) * dy) * panSpeed;
+        camTargetZ = touchStart.panZ - (-Math.sin(camAngle) * dx + Math.cos(camAngle) * dy) * panSpeed;
         updateCameraPos();
       } else if (e.touches.length === 2) {
+        // Two fingers = zoom + rotate
         const dist = Math.hypot(
           e.touches[0].clientX - e.touches[1].clientX,
           e.touches[0].clientY - e.touches[1].clientY
         );
         camDist = Math.max(20, Math.min(250, touchStartDist * (lastTouchDist3D / dist)));
+        // Also rotate with two-finger twist
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const angle = Math.atan2(e.touches[0].clientY - e.touches[1].clientY, e.touches[0].clientX - e.touches[1].clientX);
         updateCameraPos();
       }
     } else {
@@ -1389,11 +1404,12 @@ function init3D() {
   }, { passive: true });
 
   // Mouse controls (desktop fallback)
-  let mouseDown = false, mouseStartX, mouseStartY, mouseStartAngle, mouseStartPitch;
+  let mouseDown = false, mouseStartX, mouseStartY, mouseStartAngle, mouseStartPitch, mouseStartPanX, mouseStartPanZ;
   canvas.addEventListener('mousedown', (e) => {
     mouseDown = true; touchMoved = false;
     mouseStartX = e.clientX; mouseStartY = e.clientY;
     mouseStartAngle = camAngle; mouseStartPitch = camPitch;
+    mouseStartPanX = camTargetX; mouseStartPanZ = camTargetZ;
     if (editMode && selectedMesh) {
       const hit = raycast(e.clientX, e.clientY);
       if (hit && hit.name === meshToName.get(selectedMesh)) {
@@ -1408,8 +1424,18 @@ function init3D() {
       if (editMode && isDragging && selectedMesh) {
         dragMeshTo(e.clientX, e.clientY);
       } else if (navMode === 'orbit' || editMode) {
-        camAngle = mouseStartAngle - (e.clientX - mouseStartX) * 0.005;
-        camPitch = Math.max(0.05, Math.min(Math.PI / 2.1, mouseStartPitch + (e.clientY - mouseStartY) * 0.005));
+        const dx = e.clientX - mouseStartX;
+        const dy = e.clientY - mouseStartY;
+        if (e.shiftKey || e.buttons === 2) {
+          // Shift+drag or right-click = rotate
+          camAngle = mouseStartAngle - dx * 0.005;
+          camPitch = Math.max(0.05, Math.min(Math.PI / 2.1, mouseStartPitch + dy * 0.005));
+        } else {
+          // Normal drag = pan
+          const panSpeed = camDist * 0.002;
+          camTargetX = mouseStartPanX - (Math.cos(camAngle) * dx + Math.sin(camAngle) * dy) * panSpeed;
+          camTargetZ = mouseStartPanZ - (-Math.sin(camAngle) * dx + Math.cos(camAngle) * dy) * panSpeed;
+        }
         updateCameraPos();
       }
     }
@@ -1503,10 +1529,10 @@ function init3D() {
 
 function updateCameraPos() {
   if (!camera) return;
-  camera.position.x = camDist * Math.sin(camAngle) * Math.cos(camPitch);
+  camera.position.x = camTargetX + camDist * Math.sin(camAngle) * Math.cos(camPitch);
   camera.position.y = camDist * Math.sin(camPitch);
-  camera.position.z = camDist * Math.cos(camAngle) * Math.cos(camPitch);
-  camera.lookAt(0, 2, 0);
+  camera.position.z = camTargetZ + camDist * Math.cos(camAngle) * Math.cos(camPitch);
+  camera.lookAt(camTargetX, 2, camTargetZ);
 }
 
 // ══════════════════════════════════════════
@@ -1757,9 +1783,13 @@ function toggleNavMode() {
   }
 }
 
+function rotateLeft() { camAngle -= Math.PI / 8; updateCameraPos(); }
+function rotateRight() { camAngle += Math.PI / 8; updateCameraPos(); }
+
 function resetCamera() {
   if (navMode === 'walk') { toggleNavMode(); }
   camAngle = Math.PI / 4; camPitch = Math.PI / 5; camDist = 120;
+  camTargetX = 0; camTargetZ = 0;
   updateCameraPos();
 }
 
