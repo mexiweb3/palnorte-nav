@@ -321,7 +321,7 @@ body {
 <body>
 
 <!-- ══════ MAP PANEL ══════ -->
-<div id="map-panel" class="panel active">
+<div id="map-panel" class="panel">
   <div class="gps-status">
     <div class="gps-status-dot" id="gps-dot-status"></div>
     <span id="gps-text">Activando GPS...</span>
@@ -339,7 +339,7 @@ body {
 </div>
 
 <!-- ══════ 3D PANEL ══════ -->
-<div id="three-panel" class="panel">
+<div id="three-panel" class="panel active">
   <div class="three-label">Fundidora 3D — arrastra para rotar, pinch para zoom</div>
   <div class="three-legend" id="three-legend">
     <div><span class="legend-dot" style="background:#ff0055"></span> Escenarios</div>
@@ -354,7 +354,7 @@ body {
     <p id="tt-info"></p>
   </div>
   <div class="three-controls">
-    <button class="three-btn" id="btn-edit" onclick="toggleEditMode()">✏️</button>
+    <button class="three-btn" id="btn-edit" onclick="toggleEditMode()" style="background:#ffaa00;color:#000;font-size:22px;border-color:#ffaa00">✏️</button>
     <button class="three-btn" id="btn-mode" onclick="toggleNavMode()">🚶</button>
     <button class="three-btn" onclick="resetCamera()">🏠</button>
     <button class="three-btn" onclick="topView()">⬆</button>
@@ -438,10 +438,10 @@ body {
 
 <!-- ══════ TABS ══════ -->
 <div class="tabs">
-  <button class="tab active" onclick="showPanel('map-panel', this)">
+  <button class="tab" onclick="showPanel('map-panel', this)">
     <span class="tab-icon">🗺</span>Mapa
   </button>
-  <button class="tab" onclick="showPanel('three-panel', this); init3D();">
+  <button class="tab active" onclick="showPanel('three-panel', this); init3D();">
     <span class="tab-icon">🏗</span>3D
   </button>
   <button class="tab" onclick="showPanel('agenda-panel', this)">
@@ -903,6 +903,7 @@ document.getElementById('map-img').onload = () => {
 startGPS();
 renderAgenda();
 renderChecklist();
+init3D();
 
 // ══════════════════════════════════════════
 // 3D SCENE
