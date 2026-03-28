@@ -906,7 +906,6 @@ document.getElementById('map-img').onload = () => {
 startGPS();
 renderAgenda();
 renderChecklist();
-init3D();
 
 // ══════════════════════════════════════════
 // 3D SCENE
@@ -1798,8 +1797,9 @@ updateGPSDot = function() {
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
+
+// Init 3D — must be after all declarations
+init3D();
 </script>
-</body>
-</html>
 </body>
 </html>
