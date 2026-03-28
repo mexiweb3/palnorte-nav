@@ -2288,9 +2288,14 @@ function scaleSat3D(factor) {
 }
 
 function saveSat3DPos() {
-  localStorage.setItem('sat3d-pos', JSON.stringify({ x: satOff3DX, z: satOff3DZ, s: satScale3D }));
-  document.querySelector('.three-label').textContent = '💾 Posición satelital 3D guardada';
-  setTimeout(() => { if (sat3DEditMode) document.querySelector('.three-label').textContent = '🛰 Satelital — Flechas: mover, PgUp/Dn: escalar, S: guardar'; }, 1500);
+  const data = JSON.stringify({ x: +satOff3DX.toFixed(2), z: +satOff3DZ.toFixed(2), s: +satScale3D.toFixed(4) });
+  localStorage.setItem('sat3d-pos', data);
+  navigator.clipboard.writeText(data).then(() => {
+    document.querySelector('.three-label').textContent = '💾 Copiado: ' + data;
+  }).catch(() => {
+    document.querySelector('.three-label').textContent = '💾 Guardado: ' + data;
+  });
+  setTimeout(() => { if (sat3DEditMode) document.querySelector('.three-label').textContent = '🛰 Satelital — Flechas: mover, PgUp/Dn: escalar, S: guardar'; }, 3000);
 }
 
 // ══════════════════════════════════════════
