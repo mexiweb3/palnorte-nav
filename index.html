@@ -2189,80 +2189,108 @@ function loadLayout() {
 // ══════════════════════════════════════════
 // MAP LAYER TOGGLE (satellite from OSM/Esri)
 // ══════════════════════════════════════════
-let mapLayerMode = 0; // 0=palnorte, 1=satellite, 2=off
+let mapLayerMode = 0; // 0=off, 1=satellite
 let satTexture = null;
+let satPlane3D = null;
+let satOff3DX = 0, satOff3DZ = 0, satScale3D = 1;
+let sat3DEditMode = false;
+
+// Load saved 3D satellite position
+(function loadSat3DPos() {
+  const saved = localStorage.getItem('sat3d-pos');
+  if (saved) {
+    try {
+      const p = JSON.parse(saved);
+      satOff3DX = p.x || 0; satOff3DZ = p.z || 0; satScale3D = p.s || 1;
+    } catch(e) {}
+  }
+})();
 
 function toggleMapLayer() {
-  mapLayerMode = (mapLayerMode + 1) % 3;
   const btn = document.getElementById('btn-layer');
 
-  if (!groundMeshRef) {
-    // Find the ground mesh
-    scene.children.forEach(child => {
-      if (child.isMesh && child.geometry && child.geometry.type === 'PlaneGeometry') {
-        groundMeshRef = child;
-        originalTexture = child.material.map;
-      }
-    });
-  }
-  if (!groundMeshRef) return;
+  if (!satPlane3D) {
+    // Create satellite plane (separate from ground)
+    btn.textContent = '⏳';
+    const zoom = 16;
+    const lat = CENTER_LAT, lng = CENTER_LNG;
+    const n = Math.pow(2, zoom);
+    const tileX = Math.floor((lng + 180) / 360 * n);
+    const latRad = lat * Math.PI / 180;
+    const tileY = Math.floor((1 - Math.log(Math.tan(latRad) + 1/Math.cos(latRad)) / Math.PI) / 2 * n);
 
-  if (mapLayerMode === 0) {
-    // Pa'l Norte map
-    btn.textContent = '🗺';
-    groundMeshRef.material.map = originalTexture;
-    groundMeshRef.material.opacity = 0.5;
-    groundMeshRef.material.needsUpdate = true;
-    groundMeshRef.visible = true;
-  } else if (mapLayerMode === 1) {
-    // Load satellite/street tiles as a single image from Esri
-    btn.textContent = '🛰';
-    if (satTexture) {
-      groundMeshRef.material.map = satTexture;
-      groundMeshRef.material.opacity = 0.7;
-      groundMeshRef.material.needsUpdate = true;
-    } else {
-      // Use Esri World Imagery tile - zoom 16 covers the area well
-      // Center: 25.678, -100.2846  → tile x,y at zoom 16
-      const zoom = 16;
-      const lat = CENTER_LAT, lng = CENTER_LNG;
-      const n = Math.pow(2, zoom);
-      const tileX = Math.floor((lng + 180) / 360 * n);
-      const latRad = lat * Math.PI / 180;
-      const tileY = Math.floor((1 - Math.log(Math.tan(latRad) + 1/Math.cos(latRad)) / Math.PI) / 2 * n);
+    // 5x5 grid for good coverage
+    const gridSize = 5;
+    const half = Math.floor(gridSize / 2);
+    const tileCanvas = document.createElement('canvas');
+    tileCanvas.width = gridSize * 256; tileCanvas.height = gridSize * 256;
+    const tileCtx = tileCanvas.getContext('2d');
+    let loaded = 0;
+    const total = gridSize * gridSize;
 
-      // Load a 3x3 grid of tiles and stitch them
-      const tileCanvas = document.createElement('canvas');
-      tileCanvas.width = 768; tileCanvas.height = 768;
-      const tileCtx = tileCanvas.getContext('2d');
-      let loaded = 0;
-
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${tileY+dy}/${tileX+dx}`;
-          const px = (dx+1) * 256, py = (dy+1) * 256;
-          img.onload = () => {
-            tileCtx.drawImage(img, px, py, 256, 256);
-            loaded++;
-            if (loaded === 9) {
-              satTexture = new THREE.CanvasTexture(tileCanvas);
-              satTexture.repeat.set(1, 1);
-              groundMeshRef.material.map = satTexture;
-              groundMeshRef.material.opacity = 0.7;
-              groundMeshRef.material.needsUpdate = true;
-            }
-          };
-          img.onerror = () => { loaded++; };
-        }
+    for (let dy = -half; dy <= half; dy++) {
+      for (let dx = -half; dx <= half; dx++) {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${tileY+dy}/${tileX+dx}`;
+        const px = (dx+half) * 256, py = (dy+half) * 256;
+        img.onload = () => {
+          tileCtx.drawImage(img, px, py, 256, 256);
+          loaded++;
+          if (loaded === total) {
+            satTexture = new THREE.CanvasTexture(tileCanvas);
+            const satGeo = new THREE.PlaneGeometry(200, 200);
+            const satMat = new THREE.MeshBasicMaterial({ map: satTexture, transparent: true, opacity: 0.6 });
+            satPlane3D = new THREE.Mesh(satGeo, satMat);
+            satPlane3D.rotation.x = -Math.PI / 2;
+            satPlane3D.position.set(satOff3DX, -0.05, satOff3DZ);
+            satPlane3D.scale.set(satScale3D, satScale3D, satScale3D);
+            scene.add(satPlane3D);
+            btn.textContent = '🛰';
+            mapLayerMode = 1;
+            sat3DEditMode = true;
+            document.querySelector('.three-label').textContent = '🛰 Satelital — Flechas: mover, PgUp/Dn: escalar, S: guardar';
+          }
+        };
+        img.onerror = () => { loaded++; };
       }
     }
-  } else {
-    // Off
-    btn.textContent = '⬛';
-    groundMeshRef.visible = false;
+    return;
   }
+
+  // Toggle visibility
+  if (satPlane3D.visible) {
+    satPlane3D.visible = false;
+    sat3DEditMode = false;
+    btn.textContent = '🗺';
+    document.querySelector('.three-label').textContent = 'OK — 3D rendering';
+    mapLayerMode = 0;
+  } else {
+    satPlane3D.visible = true;
+    sat3DEditMode = true;
+    btn.textContent = '🛰';
+    document.querySelector('.three-label').textContent = '🛰 Satelital — Flechas: mover, PgUp/Dn: escalar, S: guardar';
+    mapLayerMode = 1;
+  }
+}
+
+function moveSat3D(dx, dz) {
+  if (!satPlane3D) return;
+  satOff3DX += dx; satOff3DZ += dz;
+  satPlane3D.position.x = satOff3DX;
+  satPlane3D.position.z = satOff3DZ;
+}
+
+function scaleSat3D(factor) {
+  if (!satPlane3D) return;
+  satScale3D *= factor;
+  satPlane3D.scale.set(satScale3D, satScale3D, satScale3D);
+}
+
+function saveSat3DPos() {
+  localStorage.setItem('sat3d-pos', JSON.stringify({ x: satOff3DX, z: satOff3DZ, s: satScale3D }));
+  document.querySelector('.three-label').textContent = '💾 Posición satelital 3D guardada';
+  setTimeout(() => { if (sat3DEditMode) document.querySelector('.three-label').textContent = '🛰 Satelital — Flechas: mover, PgUp/Dn: escalar, S: guardar'; }, 1500);
 }
 
 // ══════════════════════════════════════════
@@ -2397,28 +2425,28 @@ function satKeyLoop() {
   satAnimFrame = requestAnimationFrame(satKeyLoop);
 }
 
-// Ground 3D key loop
-function ground3DKeyLoop() {
-  if (!ground3DEditMode || keysDown.size === 0) { satAnimFrame = null; return; }
+// 3D satellite key loop
+function sat3DKeyLoop() {
+  if (!sat3DEditMode || keysDown.size === 0) { satAnimFrame = null; return; }
   const step = keysDown.has('Shift') ? 2 : 0.5;
-  if (keysDown.has('ArrowUp')) moveGround(0, -step);
-  if (keysDown.has('ArrowDown')) moveGround(0, step);
-  if (keysDown.has('ArrowLeft')) moveGround(-step, 0);
-  if (keysDown.has('ArrowRight')) moveGround(step, 0);
-  if (keysDown.has('PageUp')) scaleGround(1.005);
-  if (keysDown.has('PageDown')) scaleGround(0.995);
-  satAnimFrame = requestAnimationFrame(ground3DKeyLoop);
+  if (keysDown.has('ArrowUp')) moveSat3D(0, -step);
+  if (keysDown.has('ArrowDown')) moveSat3D(0, step);
+  if (keysDown.has('ArrowLeft')) moveSat3D(-step, 0);
+  if (keysDown.has('ArrowRight')) moveSat3D(step, 0);
+  if (keysDown.has('PageUp')) scaleSat3D(1.005);
+  if (keysDown.has('PageDown')) scaleSat3D(0.995);
+  satAnimFrame = requestAnimationFrame(sat3DKeyLoop);
 }
 
 document.addEventListener('keydown', (e) => {
-  // Ground 3D edit mode
-  if (ground3DEditMode && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Shift'].includes(e.key)) {
+  // 3D satellite edit mode
+  if (sat3DEditMode && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Shift'].includes(e.key)) {
     e.preventDefault();
     keysDown.add(e.key);
-    if (!satAnimFrame) satAnimFrame = requestAnimationFrame(ground3DKeyLoop);
+    if (!satAnimFrame) satAnimFrame = requestAnimationFrame(sat3DKeyLoop);
     return;
   }
-  if (ground3DEditMode && (e.key === 's' || e.key === 'S')) { saveGroundPos(); return; }
+  if (sat3DEditMode && (e.key === 's' || e.key === 'S')) { saveSat3DPos(); return; }
 
   // Satellite continuous movement
   if (sat2DVisible && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Shift'].includes(e.key)) {
