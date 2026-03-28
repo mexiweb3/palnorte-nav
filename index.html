@@ -1034,10 +1034,10 @@ function init3D() {
   dbg.textContent = '5. Renderer ok ' + canvas.width + 'x' + canvas.height;
 
   // Lights
-  const ambient = new THREE.AmbientLight(0xffffff, 1.2);
+  const ambient = new THREE.AmbientLight(0x8899bb, 0.8);
   scene.add(ambient);
 
-  const moon = new THREE.DirectionalLight(0xffffff, 0.8);
+  const moon = new THREE.DirectionalLight(0xccccff, 0.5);
   moon.position.set(50, 100, 30);
   moon.castShadow = true;
   scene.add(moon);
@@ -1061,7 +1061,7 @@ function init3D() {
   const groundH = groundW * (2000 / 1600);
   const groundGeo = new THREE.PlaneGeometry(groundW, groundH);
   const groundMat = new THREE.MeshStandardMaterial({
-    color: 0xffffff, roughness: 0.9, metalness: 0, transparent: false
+    color: 0xcccccc, roughness: 0.9, metalness: 0, transparent: false
   });
   const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.rotation.x = -Math.PI / 2;
