@@ -2316,6 +2316,23 @@ updateGPSDot = function() {
 
 // Keyboard controls for editor
 document.addEventListener('keydown', (e) => {
+  // Arrow keys: move satellite when visible, otherwise 3D editor
+  if (sat2DVisible && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    e.preventDefault();
+    const step = e.shiftKey ? 50 : 10;
+    switch(e.key) {
+      case 'ArrowUp': moveSat(0, -step); break;
+      case 'ArrowDown': moveSat(0, step); break;
+      case 'ArrowLeft': moveSat(-step, 0); break;
+      case 'ArrowRight': moveSat(step, 0); break;
+    }
+    return;
+  }
+  // +/- keys for satellite scale
+  if (sat2DVisible && (e.key === '+' || e.key === '=')) { scaleSat(1.05); return; }
+  if (sat2DVisible && (e.key === '-' || e.key === '_')) { scaleSat(0.95); return; }
+
+  // 3D editor keys
   if (!editMode || !selectedMesh) return;
   const name = meshToName.get(selectedMesh);
   switch(e.key.toLowerCase()) {
