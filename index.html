@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="manifest" href="manifest.json">
+<title>Pa'l Norte Navigator</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #0a0a0a;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  overflow: hidden;
+  height: 100dvh;
+  width: 100vw;
+  touch-action: none;
+}
+
+/* ── Tabs ── */
+.tabs {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  display: flex; z-index: 100;
+  background: rgba(10,10,10,0.95);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid #222;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tab {
+  flex: 1; padding: 10px 0 8px;
+  text-align: center; font-size: 11px;
+  color: #666; border: none; background: none;
+  cursor: pointer; transition: color .2s;
+}
+.tab.active { color: #00e5ff; }
+.tab-icon { font-size: 22px; display: block; margin-bottom: 2px; }
+
+/* ── Panels ── */
+.panel { display: none; height: 100dvh; width: 100vw; }
+.panel.active { display: block; }
+
+/* ── Map Panel ── */
+#map-panel { position: relative; overflow: hidden; }
+#map-container {
+  position: absolute; top: 0; left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+#map-container img {
+  display: block;
+  pointer-events: none;
+}
+.gps-dot {
+  position: absolute; width: 18px; height: 18px;
+  border-radius: 50%; background: #00e5ff;
+  border: 3px solid #fff;
+  box-shadow: 0 0 12px rgba(0,229,255,0.7), 0 0 30px rgba(0,229,255,0.3);
+  transform: translate(-50%, -50%);
+  z-index: 50;
+  display: none;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0% { box-shadow: 0 0 12px rgba(0,229,255,0.7), 0 0 30px rgba(0,229,255,0.3); }
+  50% { box-shadow: 0 0 20px rgba(0,229,255,0.9), 0 0 50px rgba(0,229,255,0.5); }
+  100% { box-shadow: 0 0 12px rgba(0,229,255,0.7), 0 0 30px rgba(0,229,255,0.3); }
+}
+.gps-accuracy {
+  position: absolute; border-radius: 50%;
+  background: rgba(0,229,255,0.1);
+  border: 1px solid rgba(0,229,255,0.25);
+  transform: translate(-50%, -50%);
+  z-index: 49; display: none;
+}
+
+.poi-marker {
+  position: absolute; transform: translate(-50%, -100%);
+  z-index: 40; cursor: pointer;
+  font-size: 26px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8));
+  transition: transform .15s;
+}
+.poi-marker:active { transform: translate(-50%, -100%) scale(1.3); }
+.poi-label {
+  position: absolute; transform: translate(-50%, 4px);
+  font-size: 10px; font-weight: 700;
+  color: #fff; white-space: nowrap;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+  z-index: 41;
+}
+
+/* Map controls */
+.map-controls {
+  position: fixed; right: 12px; bottom: 80px;
+  display: flex; flex-direction: column; gap: 8px;
+  z-index: 90;
+}
+.map-btn {
+  width: 44px; height: 44px; border-radius: 22px;
+  background: rgba(10,10,10,0.9); border: 1px solid #333;
+  color: #fff; font-size: 20px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(8px);
+}
+.map-btn.locating { color: #00e5ff; }
+
+.gps-status {
+  position: fixed; top: 12px; left: 12px; right: 12px;
+  padding: 8px 14px; border-radius: 10px;
+  background: rgba(10,10,10,0.9); border: 1px solid #333;
+  font-size: 12px; color: #aaa; z-index: 90;
+  backdrop-filter: blur(8px);
+  display: flex; align-items: center; gap: 8px;
+}
+.gps-status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #666; flex-shrink: 0;
+}
+.gps-status-dot.active { background: #00e5ff; }
+.gps-status-dot.error { background: #ff4444; }
+
+/* ── Agenda Panel ── */
+#agenda-panel {
+  padding: 60px 16px 80px;
+  overflow-y: auto; height: 100dvh;
+}
+.agenda-header {
+  font-size: 22px; font-weight: 800;
+  margin-bottom: 4px;
+}
+.agenda-sub {
+  color: #666; font-size: 13px; margin-bottom: 20px;
+}
+.agenda-item {
+  display: flex; gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #1a1a1a;
+  align-items: flex-start;
+}
+.agenda-time {
+  font-size: 13px; font-weight: 700;
+  color: #00e5ff; min-width: 52px;
+  padding-top: 2px;
+}
+.agenda-info { flex: 1; }
+.agenda-artist {
+  font-size: 15px; font-weight: 700;
+}
+.agenda-detail {
+  font-size: 12px; color: #888; margin-top: 2px;
+}
+.agenda-who {
+  display: inline-block; font-size: 10px;
+  padding: 2px 8px; border-radius: 10px;
+  margin-top: 4px; font-weight: 600;
+}
+.who-todos { background: #1a3a1a; color: #4ade80; }
+.who-dra { background: #1a1a3a; color: #818cf8; }
+.who-mexi { background: #3a2a1a; color: #fb923c; }
+.agenda-break {
+  opacity: 0.5; font-style: italic;
+}
+.agenda-now {
+  background: rgba(0,229,255,0.08);
+  border-left: 3px solid #00e5ff;
+  border-radius: 0 8px 8px 0;
+  padding-left: 9px;
+  margin-left: -12px;
+}
+
+/* ── Cuidados Panel ── */
+#care-panel {
+  padding: 60px 16px 80px;
+  overflow-y: auto; height: 100dvh;
+}
+.care-header {
+  font-size: 22px; font-weight: 800;
+  margin-bottom: 16px;
+}
+.care-card {
+  background: #141414; border-radius: 12px;
+  padding: 16px; margin-bottom: 12px;
+  border: 1px solid #222;
+}
+.care-card h3 {
+  font-size: 14px; margin-bottom: 8px;
+}
+.care-card p, .care-card li {
+  font-size: 13px; color: #aaa; line-height: 1.5;
+}
+.care-card ul { padding-left: 18px; }
+.care-card li { margin-bottom: 4px; }
+
+.ice-timer {
+  background: linear-gradient(135deg, #0a2a3a, #0a1a2a);
+  border: 1px solid #00e5ff33;
+  text-align: center; padding: 24px;
+}
+.ice-timer h3 { color: #00e5ff; font-size: 16px; }
+.ice-countdown {
+  font-size: 48px; font-weight: 800;
+  color: #00e5ff; margin: 12px 0;
+  font-variant-numeric: tabular-nums;
+}
+.ice-btn {
+  background: #00e5ff; color: #000; border: none;
+  padding: 12px 32px; border-radius: 24px;
+  font-size: 14px; font-weight: 700;
+  cursor: pointer; margin-top: 8px;
+}
+.ice-btn.reset { background: #333; color: #fff; margin-left: 8px; }
+
+/* ── Checklist Panel ── */
+#checklist-panel {
+  padding: 60px 16px 80px;
+  overflow-y: auto; height: 100dvh;
+}
+.check-header {
+  font-size: 22px; font-weight: 800;
+  margin-bottom: 16px;
+}
+.check-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid #1a1a1a;
+  font-size: 15px; cursor: pointer;
+}
+.check-box {
+  width: 24px; height: 24px; border-radius: 6px;
+  border: 2px solid #444; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .2s;
+}
+.check-item.done .check-box {
+  background: #00e5ff; border-color: #00e5ff;
+}
+.check-item.done .check-box::after {
+  content: '✓'; color: #000; font-weight: 800; font-size: 14px;
+}
+.check-item.done .check-text {
+  text-decoration: line-through; opacity: 0.4;
+}
+</style>
+</head>
+<body>
+
+<!-- ══════ MAP PANEL ══════ -->
+<div id="map-panel" class="panel active">
+  <div class="gps-status">
+    <div class="gps-status-dot" id="gps-dot-status"></div>
+    <span id="gps-text">Activando GPS...</span>
+  </div>
+  <div id="map-container">
+    <img id="map-img" src="mapa.png" alt="Mapa Pa'l Norte">
+    <div class="gps-dot" id="gps-dot"></div>
+    <div class="gps-accuracy" id="gps-accuracy"></div>
+  </div>
+  <div class="map-controls">
+    <button class="map-btn" id="btn-locate" onclick="centerOnUser()">📍</button>
+    <button class="map-btn" id="btn-zoom-in" onclick="zoomIn()">+</button>
+    <button class="map-btn" id="btn-zoom-out" onclick="zoomOut()">−</button>
+  </div>
+</div>
+
+<!-- ══════ AGENDA PANEL ══════ -->
+<div id="agenda-panel" class="panel">
+  <div class="agenda-header">Sábado 28 Marzo</div>
+  <div class="agenda-sub">Pa'l Norte 2026 — La Dra. en VIP Tecate Light</div>
+  <div id="agenda-list"></div>
+</div>
+
+<!-- ══════ CARE PANEL ══════ -->
+<div id="care-panel" class="panel">
+  <div class="care-header">Cuidados de la Dra.</div>
+
+  <div class="care-card ice-timer">
+    <h3>Siguiente hielo en rodilla</h3>
+    <div class="ice-countdown" id="ice-countdown">--:--</div>
+    <button class="ice-btn" onclick="startIceTimer()">Iniciar 20 min</button>
+    <button class="ice-btn reset" onclick="resetIceTimer()">Reset</button>
+  </div>
+
+  <div class="care-card">
+    <h3>Cada 2-3 horas</h3>
+    <ul>
+      <li>Hielo/compresa fría 15-20 min en la rodilla</li>
+      <li>Verificar que tenga agua</li>
+      <li>Checar que la pierna esté elevada</li>
+    </ul>
+  </div>
+
+  <div class="care-card">
+    <h3>Evitar</h3>
+    <ul>
+      <li>Pierna colgando mucho rato</li>
+      <li>Zonas con mucha gente (golpes a la rodilla)</li>
+      <li>Que intente caminar o apoyar peso</li>
+      <li>Girar o torcer la rodilla</li>
+    </ul>
+  </div>
+
+  <div class="care-card">
+    <h3>Servicios médicos</h3>
+    <ul>
+      <li>Hay cruces verdes marcadas en el mapa</li>
+      <li>La más cercana al VIP está en Zona Ascendente (centro del mapa)</li>
+      <li>Estudios médicos guardados en el cel por si emergencia</li>
+    </ul>
+  </div>
+
+  <div class="care-card">
+    <h3>Diagnóstico (referencia rápida)</h3>
+    <ul>
+      <li>Rotura parcial grado 2 — LCA</li>
+      <li>Rotura menisco medial grado 2c</li>
+      <li>Condromalacia grado 4 (ICRS)</li>
+      <li>Quiste de Baker</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══════ CHECKLIST PANEL ══════ -->
+<div id="checklist-panel" class="panel">
+  <div class="check-header">Checklist</div>
+  <div id="checklist"></div>
+</div>
+
+<!-- ══════ TABS ══════ -->
+<div class="tabs">
+  <button class="tab active" onclick="showPanel('map-panel', this)">
+    <span class="tab-icon">🗺</span>Mapa
+  </button>
+  <button class="tab" onclick="showPanel('agenda-panel', this)">
+    <span class="tab-icon">📋</span>Agenda
+  </button>
+  <button class="tab" onclick="showPanel('care-panel', this)">
+    <span class="tab-icon">❄️</span>Cuidados
+  </button>
+  <button class="tab" onclick="showPanel('checklist-panel', this)">
+    <span class="tab-icon">✅</span>Check
+  </button>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+// CONFIG — Map calibration
+// ══════════════════════════════════════════
+// Map image: 1600x2000. The festival map area occupies roughly the top 75% of the image.
+// The bottom ~25% is the legend.
+// Map area within image (approximate pixel bounds of the yellow-bordered map):
+const MAP_BOUNDS = {
+  // Top-left corner of map area in image pixels
+  imgLeft: 30, imgTop: 80,
+  // Bottom-right corner of map area
+  imgRight: 1570, imgBottom: 1120,
+  // Corresponding GPS coordinates
+  // Top-left (NW corner: Av Francisco I. Madero / west edge near Tecate Light)
+  gpsNorth: 25.6815,
+  gpsWest: -100.2898,
+  // Bottom-right (SE corner: Av Constitución / east edge near Fusión Telcel)
+  gpsSouth: 25.6745,
+  gpsEast: -100.2795
+};
+
+// ══════════════════════════════════════════
+// POI definitions
+// ══════════════════════════════════════════
+const POIS = [
+  { id: 'vip', emoji: '⭐', label: 'VIP', lat: 25.6800, lng: -100.2873 },
+  { id: 'e10', emoji: '🅿️', label: 'E10', lat: 25.6748, lng: -100.2890 },
+  { id: 'acceso1', emoji: '🚪', label: 'Acceso 1', lat: 25.6755, lng: -100.2888 },
+  { id: 'tecate-light', emoji: '🎸', label: 'Tecate Light', lat: 25.6798, lng: -100.2868 },
+  { id: 'tecate-orig', emoji: '🎤', label: 'Tecate Original', lat: 25.6803, lng: -100.2838 },
+  { id: 'fusion', emoji: '🎧', label: 'Fusión Telcel', lat: 25.6765, lng: -100.2800 },
+  { id: 'acustico', emoji: '🎵', label: 'Acústico', lat: 25.6778, lng: -100.2830 },
+  { id: 'oasis', emoji: '🌴', label: 'Oasis', lat: 25.6762, lng: -100.2842 },
+  { id: 'medic1', emoji: '🏥', label: 'Médico', lat: 25.6788, lng: -100.2852 },
+  { id: 'wc-vip', emoji: '🚻', label: 'WC', lat: 25.6802, lng: -100.2880 },
+];
+
+// ══════════════════════════════════════════
+// AGENDA
+// ══════════════════════════════════════════
+const AGENDA = [
+  { time: '15:30', label: 'Salir de casa', detail: '', who: 'todos' },
+  { time: '16:00', label: 'Llegar + instalar a la Dra.', detail: 'E10 → Acceso 1 → VIP', who: 'todos' },
+  { time: '16:40', label: 'The Warning', detail: 'Tecate Light', who: 'todos' },
+  { time: '17:30', label: 'Break', detail: 'Comida, hielo, agua', who: 'todos', isBreak: true },
+  { time: '18:00', label: 'Simple Plan', detail: 'Tecate Light', who: 'dra' },
+  { time: '18:00', label: 'The Whitest Boy Alive', detail: 'Acústico', who: 'mexi' },
+  { time: '18:35', label: 'Los Fabulosos Cadillacs', detail: 'Tecate Light', who: 'todos' },
+  { time: '19:45', label: 'Break', detail: 'Hielo, pierna arriba, hidratación', who: 'todos', isBreak: true },
+  { time: '20:40', label: 'Turnstile', detail: 'Tecate Light', who: 'todos' },
+  { time: '21:25', label: 'Kygo', detail: 'Tecate Light', who: 'todos' },
+  { time: '22:25', label: 'Grupo Frontera', detail: 'Tecate Original', who: 'mexi' },
+  { time: '23:25', label: 'Guns N\' Roses', detail: 'Tecate Light', who: 'todos' },
+  { time: '01:15', label: 'Salir', detail: '10 min antes del final → E10', who: 'todos' },
+];
+
+// ══════════════════════════════════════════
+// CHECKLIST
+// ══════════════════════════════════════════
+const CHECKLIST_ITEMS = [
+  'Silla de ruedas',
+  'Hielo / compresa fría',
+  'Botella de agua extra',
+  'Cojín para la rodilla',
+  'Cargadores de cel',
+  'Cobija ligera',
+  'Estudios médicos en el cel',
+  'Boletos / pulseras',
+  'Efectivo / tarjeta',
+  'Bloqueador solar',
+];
+
+// ══════════════════════════════════════════
+// TAB NAVIGATION
+// ══════════════════════════════════════════
+function showPanel(id, tabEl) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  tabEl.classList.add('active');
+}
+
+// ══════════════════════════════════════════
+// MAP — Pan & Zoom (touch + mouse)
+// ══════════════════════════════════════════
+let scale = 0.25;
+let panX = 0, panY = 0;
+let isPanning = false;
+let startX, startY, startPanX, startPanY;
+let lastPinchDist = 0;
+const mapContainer = document.getElementById('map-container');
+const mapPanel = document.getElementById('map-panel');
+
+function applyTransform() {
+  mapContainer.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+}
+
+function clampPan() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const w = 1600 * scale;
+  const h = 2000 * scale;
+  if (w < vw) panX = (vw - w) / 2;
+  else { panX = Math.min(0, panX); panX = Math.max(vw - w, panX); }
+  if (h < vh) panY = (vh - h) / 2;
+  else { panY = Math.min(0, panY); panY = Math.max(vh - h, panY); }
+}
+
+// Initial fit
+function fitMap() {
+  const vw = window.innerWidth;
+  scale = vw / 1600;
+  panX = 0; panY = 0;
+  clampPan();
+  applyTransform();
+}
+
+// Touch events
+mapPanel.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 1) {
+    isPanning = true;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    startPanX = panX; startPanY = panY;
+  } else if (e.touches.length === 2) {
+    isPanning = false;
+    lastPinchDist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+  }
+}, { passive: true });
+
+mapPanel.addEventListener('touchmove', (e) => {
+  if (e.touches.length === 1 && isPanning) {
+    panX = startPanX + (e.touches[0].clientX - startX);
+    panY = startPanY + (e.touches[0].clientY - startY);
+    clampPan(); applyTransform();
+  } else if (e.touches.length === 2) {
+    const dist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    const mid = {
+      x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+      y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+    };
+    const factor = dist / lastPinchDist;
+    const newScale = Math.min(2, Math.max(0.15, scale * factor));
+    // Zoom toward pinch center
+    panX = mid.x - (mid.x - panX) * (newScale / scale);
+    panY = mid.y - (mid.y - panY) * (newScale / scale);
+    scale = newScale;
+    lastPinchDist = dist;
+    clampPan(); applyTransform();
+  }
+}, { passive: true });
+
+mapPanel.addEventListener('touchend', () => { isPanning = false; });
+
+// Mouse (desktop fallback)
+mapPanel.addEventListener('mousedown', (e) => {
+  isPanning = true; startX = e.clientX; startY = e.clientY;
+  startPanX = panX; startPanY = panY;
+});
+mapPanel.addEventListener('mousemove', (e) => {
+  if (!isPanning) return;
+  panX = startPanX + (e.clientX - startX);
+  panY = startPanY + (e.clientY - startY);
+  clampPan(); applyTransform();
+});
+mapPanel.addEventListener('mouseup', () => { isPanning = false; });
+mapPanel.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const factor = e.deltaY > 0 ? 0.9 : 1.1;
+  const newScale = Math.min(2, Math.max(0.15, scale * factor));
+  panX = e.clientX - (e.clientX - panX) * (newScale / scale);
+  panY = e.clientY - (e.clientY - panY) * (newScale / scale);
+  scale = newScale;
+  clampPan(); applyTransform();
+}, { passive: false });
+
+function zoomIn() {
+  const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+  const newScale = Math.min(2, scale * 1.3);
+  panX = cx - (cx - panX) * (newScale / scale);
+  panY = cy - (cy - panY) * (newScale / scale);
+  scale = newScale;
+  clampPan(); applyTransform();
+}
+function zoomOut() {
+  const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+  const newScale = Math.max(0.15, scale / 1.3);
+  panX = cx - (cx - panX) * (newScale / scale);
+  panY = cy - (cy - panY) * (newScale / scale);
+  scale = newScale;
+  clampPan(); applyTransform();
+}
+
+// ══════════════════════════════════════════
+// GPS → pixel mapping
+// ══════════════════════════════════════════
+function gpsToPixel(lat, lng) {
+  const b = MAP_BOUNDS;
+  const x = b.imgLeft + (lng - b.gpsWest) / (b.gpsEast - b.gpsWest) * (b.imgRight - b.imgLeft);
+  const y = b.imgTop + (lat - b.gpsNorth) / (b.gpsSouth - b.gpsNorth) * (b.imgBottom - b.imgTop);
+  return { x, y };
+}
+
+// ══════════════════════════════════════════
+// POI markers
+// ══════════════════════════════════════════
+function renderPOIs() {
+  POIS.forEach(poi => {
+    const pos = gpsToPixel(poi.lat, poi.lng);
+    const marker = document.createElement('div');
+    marker.className = 'poi-marker';
+    marker.textContent = poi.emoji;
+    marker.style.left = pos.x + 'px';
+    marker.style.top = pos.y + 'px';
+    mapContainer.appendChild(marker);
+
+    const label = document.createElement('div');
+    label.className = 'poi-label';
+    label.textContent = poi.label;
+    label.style.left = pos.x + 'px';
+    label.style.top = (pos.y + 4) + 'px';
+    mapContainer.appendChild(label);
+  });
+}
+
+// ══════════════════════════════════════════
+// GPS tracking
+// ══════════════════════════════════════════
+let userLat = null, userLng = null, userAccuracy = null;
+let watchId = null;
+const gpsDot = document.getElementById('gps-dot');
+const gpsAccEl = document.getElementById('gps-accuracy');
+const gpsStatusDot = document.getElementById('gps-dot-status');
+const gpsText = document.getElementById('gps-text');
+
+function startGPS() {
+  if (!navigator.geolocation) {
+    gpsText.textContent = 'GPS no disponible';
+    gpsStatusDot.classList.add('error');
+    return;
+  }
+  watchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      userLat = pos.coords.latitude;
+      userLng = pos.coords.longitude;
+      userAccuracy = pos.coords.accuracy;
+      gpsStatusDot.classList.add('active');
+      gpsStatusDot.classList.remove('error');
+      gpsText.textContent = `GPS activo — precisión ${Math.round(userAccuracy)}m`;
+      updateGPSDot();
+    },
+    (err) => {
+      gpsStatusDot.classList.add('error');
+      gpsStatusDot.classList.remove('active');
+      gpsText.textContent = 'Error GPS: ' + err.message;
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+  );
+}
+
+function updateGPSDot() {
+  if (userLat === null) return;
+  const pos = gpsToPixel(userLat, userLng);
+  gpsDot.style.left = pos.x + 'px';
+  gpsDot.style.top = pos.y + 'px';
+  gpsDot.style.display = 'block';
+
+  // Accuracy circle
+  const metersPerPixelLat = (MAP_BOUNDS.gpsNorth - MAP_BOUNDS.gpsSouth) * 111320 / (MAP_BOUNDS.imgBottom - MAP_BOUNDS.imgTop);
+  const accRadius = userAccuracy / metersPerPixelLat;
+  gpsAccEl.style.left = pos.x + 'px';
+  gpsAccEl.style.top = pos.y + 'px';
+  gpsAccEl.style.width = accRadius * 2 + 'px';
+  gpsAccEl.style.height = accRadius * 2 + 'px';
+  gpsAccEl.style.display = 'block';
+}
+
+function centerOnUser() {
+  if (userLat === null) {
+    gpsText.textContent = 'Esperando señal GPS...';
+    return;
+  }
+  const pos = gpsToPixel(userLat, userLng);
+  const vw = window.innerWidth, vh = window.innerHeight;
+  scale = 0.8;
+  panX = vw / 2 - pos.x * scale;
+  panY = vh / 2 - pos.y * scale;
+  clampPan(); applyTransform();
+  document.getElementById('btn-locate').classList.add('locating');
+  setTimeout(() => document.getElementById('btn-locate').classList.remove('locating'), 1500);
+}
+
+// ══════════════════════════════════════════
+// AGENDA render
+// ══════════════════════════════════════════
+function renderAgenda() {
+  const list = document.getElementById('agenda-list');
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+
+  list.innerHTML = AGENDA.map((item, i) => {
+    const [h, m] = item.time.split(':').map(Number);
+    let itemMin = h * 60 + m;
+    if (h < 6) itemMin += 24 * 60; // after midnight
+    const nextItem = AGENDA[i + 1];
+    let nextMin = 24 * 60 + 120;
+    if (nextItem) {
+      const [nh, nm] = nextItem.time.split(':').map(Number);
+      nextMin = nh * 60 + nm;
+      if (nh < 6) nextMin += 24 * 60;
+    }
+    let adjNow = nowMin;
+    if (nowMin < 6 * 60) adjNow += 24 * 60;
+    const isCurrent = adjNow >= itemMin && adjNow < nextMin;
+
+    const whoClass = item.who === 'todos' ? 'who-todos' : item.who === 'dra' ? 'who-dra' : 'who-mexi';
+    const whoLabel = item.who === 'todos' ? 'Todos' : item.who === 'dra' ? 'La Dra.' : 'Mexi + Rani';
+
+    return `
+      <div class="agenda-item ${item.isBreak ? 'agenda-break' : ''} ${isCurrent ? 'agenda-now' : ''}">
+        <div class="agenda-time">${item.time}</div>
+        <div class="agenda-info">
+          <div class="agenda-artist">${item.label}</div>
+          ${item.detail ? `<div class="agenda-detail">${item.detail}</div>` : ''}
+          <span class="agenda-who ${whoClass}">${whoLabel}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Update agenda highlight every minute
+setInterval(renderAgenda, 60000);
+
+// ══════════════════════════════════════════
+// ICE TIMER
+// ══════════════════════════════════════════
+let iceInterval = null;
+let iceEnd = null;
+
+function startIceTimer() {
+  iceEnd = Date.now() + 20 * 60 * 1000;
+  localStorage.setItem('iceEnd', iceEnd);
+  runIceTimer();
+}
+function resetIceTimer() {
+  clearInterval(iceInterval);
+  iceEnd = null;
+  localStorage.removeItem('iceEnd');
+  document.getElementById('ice-countdown').textContent = '--:--';
+}
+function runIceTimer() {
+  clearInterval(iceInterval);
+  iceInterval = setInterval(() => {
+    const remaining = iceEnd - Date.now();
+    if (remaining <= 0) {
+      clearInterval(iceInterval);
+      document.getElementById('ice-countdown').textContent = '¡QUITAR!';
+      if ('vibrate' in navigator) navigator.vibrate([500, 200, 500, 200, 500]);
+      return;
+    }
+    const m = Math.floor(remaining / 60000);
+    const s = Math.floor((remaining % 60000) / 1000);
+    document.getElementById('ice-countdown').textContent =
+      `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }, 1000);
+}
+
+// Restore ice timer from localStorage
+const savedIce = localStorage.getItem('iceEnd');
+if (savedIce && Number(savedIce) > Date.now()) {
+  iceEnd = Number(savedIce);
+  runIceTimer();
+}
+
+// ══════════════════════════════════════════
+// CHECKLIST
+// ══════════════════════════════════════════
+function renderChecklist() {
+  const el = document.getElementById('checklist');
+  const saved = JSON.parse(localStorage.getItem('checklist') || '{}');
+  el.innerHTML = CHECKLIST_ITEMS.map((item, i) => `
+    <div class="check-item ${saved[i] ? 'done' : ''}" onclick="toggleCheck(${i}, this)">
+      <div class="check-box"></div>
+      <span class="check-text">${item}</span>
+    </div>
+  `).join('');
+}
+function toggleCheck(i, el) {
+  const saved = JSON.parse(localStorage.getItem('checklist') || '{}');
+  saved[i] = !saved[i];
+  localStorage.setItem('checklist', JSON.stringify(saved));
+  el.classList.toggle('done');
+}
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+document.getElementById('map-img').onload = () => {
+  fitMap();
+  renderPOIs();
+};
+startGPS();
+renderAgenda();
+renderChecklist();
+
+// Register service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
