@@ -1091,11 +1091,7 @@ function init3D() {
     originalTexture = texture;
   });
 
-  // Grid helper
-  const gridSize = 150;
-  const grid = new THREE.GridHelper(gridSize, 60, 0x222244, 0x111122);
-  grid.position.y = -0.05;
-  scene.add(grid);
+  // No grid — the map texture is enough
 
   // Build structures
   STRUCTURES.forEach(s => {
