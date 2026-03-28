@@ -1131,14 +1131,14 @@ function init3D() {
     labelCanvas.width = 512; labelCanvas.height = 64;
     const ctx = labelCanvas.getContext('2d');
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 28px -apple-system, sans-serif';
+    ctx.font = 'bold 40px -apple-system, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(s.name, 256, 40);
     const labelTexture = new THREE.CanvasTexture(labelCanvas);
     const labelMat = new THREE.SpriteMaterial({ map: labelTexture, transparent: true, opacity: 0.9 });
     const sprite = new THREE.Sprite(labelMat);
-    sprite.position.set(pos.x, sh + 2, pos.z);
-    sprite.scale.set(sw * 1.2, sw * 0.15, 1);
+    sprite.position.set(pos.x, sh + 6, pos.z);
+    sprite.scale.set(sw * 2.5, sw * 0.3, 1);
     scene.add(sprite);
     nameToSprite.set(s.name, sprite);
   });
@@ -1649,7 +1649,7 @@ function updateWireframe(name, mesh) {
   }
   const sp = nameToSprite.get(name);
   if (sp) {
-    sp.position.set(mesh.position.x, mesh.position.y + mesh.geometry.parameters.height * mesh.scale.y / 2 + 2, mesh.position.z);
+    sp.position.set(mesh.position.x, mesh.position.y + mesh.geometry.parameters.height * mesh.scale.y / 2 + 6, mesh.position.z);
   }
 }
 
