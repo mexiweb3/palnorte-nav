@@ -55,6 +55,26 @@ body {
   display: block;
   pointer-events: none;
 }
+.calibration-hud {
+  position: fixed; bottom: 70px; left: 12px; right: 12px;
+  background: rgba(10,10,10,0.95); border: 1px solid #ffaa00;
+  border-radius: 12px; padding: 12px 16px; z-index: 200;
+  backdrop-filter: blur(8px); text-align: center;
+}
+#cal-text { font-size: 13px; color: #ffaa00; margin-bottom: 8px; }
+.cal-actions { display: flex; gap: 8px; justify-content: center; }
+.cal-btn {
+  background: #222; border: 1px solid #444; color: #fff;
+  padding: 8px 14px; border-radius: 8px; font-size: 12px; cursor: pointer;
+}
+.cal-btn:active { background: #ffaa00; color: #000; }
+.cal-marker {
+  position: absolute; width: 20px; height: 20px;
+  border: 3px solid #ffaa00; border-radius: 50%;
+  background: rgba(255,170,0,0.3);
+  transform: translate(-50%, -50%);
+  z-index: 55; pointer-events: none;
+}
 .sat-layer {
   position: absolute; top: 0; left: 0;
   width: 1600px; height: 2000px;
@@ -358,7 +378,16 @@ body {
     <button class="map-btn" id="btn-locate" onclick="centerOnUser()">📍</button>
     <button class="map-btn" id="btn-zoom-in" onclick="zoomIn()">+</button>
     <button class="map-btn" id="btn-zoom-out" onclick="zoomOut()">−</button>
+    <button class="map-btn" id="btn-calibrate" onclick="startCalibration()">🎯</button>
     <input type="range" id="map-opacity" min="0" max="100" value="70" oninput="setMapOpacity(this.value)" class="opacity-slider" style="display:none">
+  </div>
+  <div class="calibration-hud" id="cal-hud" style="display:none">
+    <div id="cal-text">Párate en un punto conocido y tócalo en el mapa</div>
+    <div class="cal-actions">
+      <button class="cal-btn" onclick="saveCalibrationPoint()">Guardar punto</button>
+      <button class="cal-btn" onclick="resetCalibration()">Reset</button>
+      <button class="cal-btn" onclick="cancelCalibration()">Cancelar</button>
+    </div>
   </div>
 </div>
 
@@ -876,6 +905,167 @@ function toggle2DSat() {
 function setMapOpacity(val) {
   document.getElementById('map-img').style.opacity = val / 100;
 }
+
+// ══════════════════════════════════════════
+// GPS Calibration — 2 point system
+// ══════════════════════════════════════════
+let calMode = false;
+let calPoints = []; // [{px, py, lat, lng}]
+let calTapPx = null, calTapPy = null;
+
+function startCalibration() {
+  if (userLat === null) {
+    document.getElementById('gps-text').textContent = 'Necesitas señal GPS para calibrar';
+    return;
+  }
+  calMode = true;
+  document.getElementById('cal-hud').style.display = 'block';
+  document.getElementById('btn-calibrate').style.background = '#ffaa00';
+  document.getElementById('btn-calibrate').style.color = '#000';
+
+  // Load saved calibration points
+  const saved = localStorage.getItem('cal-points');
+  if (saved) calPoints = JSON.parse(saved);
+
+  updateCalText();
+
+  // Listen for taps on the map
+  mapContainer.addEventListener('click', onCalTap);
+}
+
+function onCalTap(e) {
+  if (!calMode) return;
+  // Get pixel position on map image
+  const rect = mapContainer.getBoundingClientRect();
+  calTapPx = (e.clientX - rect.left) / scale - panX / scale;
+  calTapPy = (e.clientY - rect.top) / scale - panY / scale;
+
+  // Correct for transform
+  calTapPx = (e.clientX - panX) / scale;
+  calTapPy = (e.clientY - panY) / scale;
+
+  // Show marker
+  let marker = document.getElementById('cal-marker-temp');
+  if (!marker) {
+    marker = document.createElement('div');
+    marker.className = 'cal-marker';
+    marker.id = 'cal-marker-temp';
+    mapContainer.appendChild(marker);
+  }
+  marker.style.left = calTapPx + 'px';
+  marker.style.top = calTapPy + 'px';
+  marker.style.display = 'block';
+
+  document.getElementById('cal-text').textContent =
+    `Punto en mapa: (${Math.round(calTapPx)}, ${Math.round(calTapPy)}) — GPS: ${userLat.toFixed(6)}, ${userLng.toFixed(6)}\nToca "Guardar punto"`;
+}
+
+function saveCalibrationPoint() {
+  if (calTapPx === null || userLat === null) {
+    document.getElementById('cal-text').textContent = 'Toca un punto en el mapa primero';
+    return;
+  }
+
+  calPoints.push({
+    px: calTapPx, py: calTapPy,
+    lat: userLat, lng: userLng
+  });
+
+  // Keep only last 2 points
+  if (calPoints.length > 2) calPoints = calPoints.slice(-2);
+
+  localStorage.setItem('cal-points', JSON.stringify(calPoints));
+
+  // Add permanent marker
+  const marker = document.createElement('div');
+  marker.className = 'cal-marker';
+  marker.style.left = calTapPx + 'px';
+  marker.style.top = calTapPy + 'px';
+  marker.style.borderColor = '#00ff88';
+  marker.style.background = 'rgba(0,255,136,0.3)';
+  mapContainer.appendChild(marker);
+
+  // Remove temp marker
+  const temp = document.getElementById('cal-marker-temp');
+  if (temp) temp.style.display = 'none';
+  calTapPx = null; calTapPy = null;
+
+  if (calPoints.length >= 2) {
+    applyCalibration();
+    document.getElementById('cal-text').textContent =
+      '✅ Calibración aplicada con 2 puntos. GPS debería ser preciso ahora.';
+  } else {
+    updateCalText();
+  }
+}
+
+function applyCalibration() {
+  if (calPoints.length < 2) return;
+  const p1 = calPoints[0], p2 = calPoints[1];
+
+  // Calculate new GPS bounds from 2 calibration points
+  // gpsPerPixelLat = (lat2 - lat1) / (py2 - py1)  (note: py increases downward, lat decreases)
+  const gpsPerPxLat = (p2.lat - p1.lat) / (p2.py - p1.py);
+  const gpsPerPxLng = (p2.lng - p1.lng) / (p2.px - p1.px);
+
+  // Recalculate bounds: GPS at pixel (imgLeft, imgTop) and (imgRight, imgBottom)
+  MAP_BOUNDS.gpsNorth = p1.lat + gpsPerPxLat * (MAP_BOUNDS.imgTop - p1.py);
+  MAP_BOUNDS.gpsSouth = p1.lat + gpsPerPxLat * (MAP_BOUNDS.imgBottom - p1.py);
+  MAP_BOUNDS.gpsWest = p1.lng + gpsPerPxLng * (MAP_BOUNDS.imgLeft - p1.px);
+  MAP_BOUNDS.gpsEast = p1.lng + gpsPerPxLng * (MAP_BOUNDS.imgRight - p1.px);
+
+  localStorage.setItem('map-bounds', JSON.stringify(MAP_BOUNDS));
+  console.log('Calibrated bounds:', MAP_BOUNDS);
+}
+
+function resetCalibration() {
+  calPoints = [];
+  localStorage.removeItem('cal-points');
+  localStorage.removeItem('map-bounds');
+  // Reset to defaults
+  MAP_BOUNDS.gpsNorth = 25.6815;
+  MAP_BOUNDS.gpsSouth = 25.6740;
+  MAP_BOUNDS.gpsWest = -100.2900;
+  MAP_BOUNDS.gpsEast = -100.2790;
+  document.getElementById('cal-text').textContent = 'Calibración reseteada. Valores por defecto.';
+  // Remove markers
+  document.querySelectorAll('.cal-marker').forEach(m => m.remove());
+}
+
+function cancelCalibration() {
+  calMode = false;
+  document.getElementById('cal-hud').style.display = 'none';
+  document.getElementById('btn-calibrate').style.background = '';
+  document.getElementById('btn-calibrate').style.color = '#fff';
+  mapContainer.removeEventListener('click', onCalTap);
+  const temp = document.getElementById('cal-marker-temp');
+  if (temp) temp.remove();
+}
+
+function updateCalText() {
+  const n = calPoints.length;
+  if (n === 0) {
+    document.getElementById('cal-text').textContent =
+      'Punto 1/2: Párate en un lugar que reconozcas (ej: Acceso 1) y toca ese punto en el mapa';
+  } else if (n === 1) {
+    document.getElementById('cal-text').textContent =
+      'Punto 2/2: Camina a otro punto conocido (ej: un escenario) y tócalo en el mapa';
+  }
+}
+
+// Load saved calibration on startup
+(function loadCalibration() {
+  const saved = localStorage.getItem('map-bounds');
+  if (saved) {
+    try {
+      const b = JSON.parse(saved);
+      MAP_BOUNDS.gpsNorth = b.gpsNorth;
+      MAP_BOUNDS.gpsSouth = b.gpsSouth;
+      MAP_BOUNDS.gpsWest = b.gpsWest;
+      MAP_BOUNDS.gpsEast = b.gpsEast;
+    } catch(e) {}
+  }
+})();
 
 function centerOnUser() {
   if (userLat === null) {
