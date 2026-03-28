@@ -2315,20 +2315,30 @@ updateGPSDot = function() {
 };
 
 // Keyboard controls for editor
+// Continuous key repeat for satellite movement
+const keysDown = new Set();
+let satAnimFrame = null;
+
+function satKeyLoop() {
+  if (!sat2DVisible || keysDown.size === 0) { satAnimFrame = null; return; }
+  const step = keysDown.has('Shift') ? 8 : 3;
+  if (keysDown.has('ArrowUp')) moveSat(0, -step);
+  if (keysDown.has('ArrowDown')) moveSat(0, step);
+  if (keysDown.has('ArrowLeft')) moveSat(-step, 0);
+  if (keysDown.has('ArrowRight')) moveSat(step, 0);
+  if (keysDown.has('PageUp')) scaleSat(1.005);
+  if (keysDown.has('PageDown')) scaleSat(0.995);
+  satAnimFrame = requestAnimationFrame(satKeyLoop);
+}
+
 document.addEventListener('keydown', (e) => {
-  // Arrow keys: move satellite when visible, otherwise 3D editor
-  if (sat2DVisible && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+  // Satellite continuous movement
+  if (sat2DVisible && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Shift'].includes(e.key)) {
     e.preventDefault();
-    const step = e.shiftKey ? 50 : 10;
-    switch(e.key) {
-      case 'ArrowUp': moveSat(0, -step); break;
-      case 'ArrowDown': moveSat(0, step); break;
-      case 'ArrowLeft': moveSat(-step, 0); break;
-      case 'ArrowRight': moveSat(step, 0); break;
-    }
+    keysDown.add(e.key);
+    if (!satAnimFrame) satAnimFrame = requestAnimationFrame(satKeyLoop);
     return;
   }
-  // +/- keys for satellite scale
   if (sat2DVisible && (e.key === '+' || e.key === '=')) { scaleSat(1.05); return; }
   if (sat2DVisible && (e.key === '-' || e.key === '_')) { scaleSat(0.95); return; }
 
@@ -2344,6 +2354,14 @@ document.addEventListener('keydown', (e) => {
     case 'd': selectedMesh.scale.x *= 1.1; updateWireframe(name, selectedMesh); break;
     case 'r': taller(1.1); break;
     case 'f': taller(0.9); break;
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  keysDown.delete(e.key);
+  if (keysDown.size === 0 && satAnimFrame) {
+    cancelAnimationFrame(satAnimFrame);
+    satAnimFrame = null;
   }
 });
 
