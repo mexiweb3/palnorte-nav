@@ -424,33 +424,37 @@ body {
 // The bottom ~25% is the legend.
 // Map area within image (approximate pixel bounds of the yellow-bordered map):
 const MAP_BOUNDS = {
-  // Top-left corner of map area in image pixels
-  imgLeft: 30, imgTop: 80,
-  // Bottom-right corner of map area
-  imgRight: 1570, imgBottom: 1120,
-  // Corresponding GPS coordinates
-  // Top-left (NW corner: Av Francisco I. Madero / west edge near Tecate Light)
+  // Yellow border bounds of map area in image pixels
+  imgLeft: 46, imgTop: 354,
+  // Bottom of map (before legend)
+  imgRight: 1553, imgBottom: 1280,
+  // Corresponding GPS coordinates (Parque Fundidora area)
   gpsNorth: 25.6815,
-  gpsWest: -100.2898,
-  // Bottom-right (SE corner: Av Constitución / east edge near Fusión Telcel)
-  gpsSouth: 25.6745,
-  gpsEast: -100.2795
+  gpsWest: -100.2900,
+  gpsSouth: 25.6740,
+  gpsEast: -100.2790
 };
 
 // ══════════════════════════════════════════
-// POI definitions
+// POI definitions — positioned in image pixels directly
 // ══════════════════════════════════════════
 const POIS = [
-  { id: 'vip', emoji: '⭐', label: 'VIP', lat: 25.6800, lng: -100.2873 },
-  { id: 'e10', emoji: '🅿️', label: 'E10', lat: 25.6748, lng: -100.2890 },
-  { id: 'acceso1', emoji: '🚪', label: 'Acceso 1', lat: 25.6755, lng: -100.2888 },
-  { id: 'tecate-light', emoji: '🎸', label: 'Tecate Light', lat: 25.6798, lng: -100.2868 },
-  { id: 'tecate-orig', emoji: '🎤', label: 'Tecate Original', lat: 25.6803, lng: -100.2838 },
-  { id: 'fusion', emoji: '🎧', label: 'Fusión Telcel', lat: 25.6765, lng: -100.2800 },
-  { id: 'acustico', emoji: '🎵', label: 'Acústico', lat: 25.6778, lng: -100.2830 },
-  { id: 'oasis', emoji: '🌴', label: 'Oasis', lat: 25.6762, lng: -100.2842 },
-  { id: 'medic1', emoji: '🏥', label: 'Médico', lat: 25.6788, lng: -100.2852 },
-  { id: 'wc-vip', emoji: '🚻', label: 'WC', lat: 25.6802, lng: -100.2880 },
+  { id: 'vip', emoji: '⭐', label: 'VIP', px: 330, py: 460 },
+  { id: 'e10', emoji: '🅿️', label: 'E10', px: 140, py: 1200 },
+  { id: 'acceso1', emoji: '🚪', label: 'Acceso 1', px: 115, py: 1100 },
+  { id: 'tecate-light', emoji: '🎸', label: 'Tecate Light', px: 360, py: 530 },
+  { id: 'tecate-orig', emoji: '🎤', label: 'Tecate Original', px: 1050, py: 460 },
+  { id: 'fusion', emoji: '🎧', label: 'Fusión Telcel', px: 1460, py: 960 },
+  { id: 'acustico', emoji: '🎵', label: 'Acústico', px: 1000, py: 730 },
+  { id: 'oasis', emoji: '🌴', label: 'Oasis', px: 930, py: 1030 },
+  { id: 'medic1', emoji: '🏥', label: 'Médico', px: 650, py: 660 },
+  { id: 'wc-vip', emoji: '🚻', label: 'WC', px: 270, py: 490 },
+  { id: 'hospitality', emoji: '🏨', label: 'Hospitality', px: 230, py: 720 },
+  { id: 'sorpresa', emoji: '🎪', label: 'Sorpresa Viva', px: 450, py: 520 },
+  { id: 'club-social', emoji: '🎶', label: 'Club Social', px: 700, py: 870 },
+  { id: 'pilos', emoji: '🍺', label: "Pilo's Bar", px: 1300, py: 790 },
+  { id: 'acceso4', emoji: '4️⃣', label: 'Acceso 4', px: 800, py: 390 },
+  { id: 'acceso6', emoji: '6️⃣', label: 'Acceso 6', px: 1520, py: 640 },
 ];
 
 // ══════════════════════════════════════════
@@ -630,19 +634,21 @@ function gpsToPixel(lat, lng) {
 // ══════════════════════════════════════════
 function renderPOIs() {
   POIS.forEach(poi => {
-    const pos = gpsToPixel(poi.lat, poi.lng);
+    // Use direct pixel positions on the map image
+    const x = poi.px;
+    const y = poi.py;
     const marker = document.createElement('div');
     marker.className = 'poi-marker';
     marker.textContent = poi.emoji;
-    marker.style.left = pos.x + 'px';
-    marker.style.top = pos.y + 'px';
+    marker.style.left = x + 'px';
+    marker.style.top = y + 'px';
     mapContainer.appendChild(marker);
 
     const label = document.createElement('div');
     label.className = 'poi-label';
     label.textContent = poi.label;
-    label.style.left = pos.x + 'px';
-    label.style.top = (pos.y + 4) + 'px';
+    label.style.left = x + 'px';
+    label.style.top = (y + 4) + 'px';
     mapContainer.appendChild(label);
   });
 }
