@@ -55,6 +55,21 @@ body {
   display: block;
   pointer-events: none;
 }
+.sat-layer {
+  position: absolute; top: 0; left: 0;
+  width: 1600px; height: 2000px;
+  display: none; z-index: 0;
+  pointer-events: none;
+}
+#map-img {
+  position: relative; z-index: 1;
+}
+.opacity-slider {
+  width: 44px; height: 120px;
+  -webkit-appearance: slider-vertical;
+  writing-mode: bt-lr;
+  accent-color: #00e5ff;
+}
 .gps-dot {
   position: absolute; width: 18px; height: 18px;
   border-radius: 50%; background: #00e5ff;
@@ -333,14 +348,17 @@ body {
     <span id="gps-text">Activando GPS...</span>
   </div>
   <div id="map-container">
+    <img id="sat-img" class="sat-layer" alt="">
     <img id="map-img" src="mapa.png" alt="Mapa Pa'l Norte">
     <div class="gps-dot" id="gps-dot"></div>
     <div class="gps-accuracy" id="gps-accuracy"></div>
   </div>
   <div class="map-controls">
+    <button class="map-btn" id="btn-sat" onclick="toggle2DSat()">🛰</button>
     <button class="map-btn" id="btn-locate" onclick="centerOnUser()">📍</button>
     <button class="map-btn" id="btn-zoom-in" onclick="zoomIn()">+</button>
     <button class="map-btn" id="btn-zoom-out" onclick="zoomOut()">−</button>
+    <input type="range" id="map-opacity" min="0" max="100" value="70" oninput="setMapOpacity(this.value)" class="opacity-slider" style="display:none">
   </div>
 </div>
 
@@ -783,6 +801,80 @@ function updateGPSDot() {
     const dist = distanceToFundidora(userLat, userLng);
     gpsText.textContent = `📍 Estás a ${dist} de Fundidora`;
   }
+}
+
+// ══════════════════════════════════════════
+// 2D Satellite layer
+// ══════════════════════════════════════════
+let sat2DLoaded = false;
+let sat2DVisible = false;
+
+function toggle2DSat() {
+  sat2DVisible = !sat2DVisible;
+  const satImg = document.getElementById('sat-img');
+  const mapImg = document.getElementById('map-img');
+  const slider = document.getElementById('map-opacity');
+  const btn = document.getElementById('btn-sat');
+
+  if (sat2DVisible) {
+    btn.style.background = '#00e5ff';
+    btn.style.color = '#000';
+    slider.style.display = 'block';
+
+    if (!sat2DLoaded) {
+      // Load satellite tiles and stitch into one image matching the map
+      const zoom = 16;
+      const lat = (MAP_BOUNDS.gpsNorth + MAP_BOUNDS.gpsSouth) / 2;
+      const lng = (MAP_BOUNDS.gpsWest + MAP_BOUNDS.gpsEast) / 2;
+      const n = Math.pow(2, zoom);
+      const centerTileX = Math.floor((lng + 180) / 360 * n);
+      const latRad = lat * Math.PI / 180;
+      const centerTileY = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n);
+
+      // 5x5 grid for better coverage
+      const gridSize = 5;
+      const half = Math.floor(gridSize / 2);
+      const canvas = document.createElement('canvas');
+      canvas.width = gridSize * 256;
+      canvas.height = gridSize * 256;
+      const ctx = canvas.getContext('2d');
+      let loaded = 0;
+      const total = gridSize * gridSize;
+
+      for (let dy = -half; dy <= half; dy++) {
+        for (let dx = -half; dx <= half; dx++) {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${centerTileY + dy}/${centerTileX + dx}`;
+          const px = (dx + half) * 256;
+          const py = (dy + half) * 256;
+          img.onload = () => {
+            ctx.drawImage(img, px, py, 256, 256);
+            loaded++;
+            if (loaded === total) {
+              satImg.src = canvas.toDataURL();
+              satImg.style.display = 'block';
+              sat2DLoaded = true;
+            }
+          };
+          img.onerror = () => { loaded++; };
+        }
+      }
+    } else {
+      satImg.style.display = 'block';
+    }
+    mapImg.style.opacity = '0.7';
+  } else {
+    btn.style.background = '';
+    btn.style.color = '#fff';
+    slider.style.display = 'none';
+    satImg.style.display = 'none';
+    mapImg.style.opacity = '1';
+  }
+}
+
+function setMapOpacity(val) {
+  document.getElementById('map-img').style.opacity = val / 100;
 }
 
 function centerOnUser() {
