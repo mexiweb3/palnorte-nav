@@ -1018,7 +1018,7 @@ function init3D() {
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0a0a0f);
-  scene.fog = new THREE.FogExp2(0x0a0a0f, 0.003);
+  scene.fog = new THREE.FogExp2(0x0a0a0f, 0.0015);
   dbg.textContent = '3. Scene created';
 
   camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 1000);
@@ -1034,10 +1034,10 @@ function init3D() {
   dbg.textContent = '5. Renderer ok ' + canvas.width + 'x' + canvas.height;
 
   // Lights
-  const ambient = new THREE.AmbientLight(0x222233, 0.6);
+  const ambient = new THREE.AmbientLight(0xffffff, 1.2);
   scene.add(ambient);
 
-  const moon = new THREE.DirectionalLight(0x8888ff, 0.4);
+  const moon = new THREE.DirectionalLight(0xffffff, 0.8);
   moon.position.set(50, 100, 30);
   moon.castShadow = true;
   scene.add(moon);
@@ -1056,11 +1056,12 @@ function init3D() {
   });
 
   // Ground plane — first create without texture, then add map
-  const groundW = (MAP_BOUNDS.gpsEast - MAP_BOUNDS.gpsWest) * M_PER_DEG_LNG * SCALE_3D;
-  const groundH = (MAP_BOUNDS.gpsNorth - MAP_BOUNDS.gpsSouth) * M_PER_DEG_LAT * SCALE_3D;
+  // Ground sized to show full map image (1600x2000 aspect = 0.8)
+  const groundW = (MAP_BOUNDS.gpsEast - MAP_BOUNDS.gpsWest) * M_PER_DEG_LNG * SCALE_3D * 1.1;
+  const groundH = groundW * (2000 / 1600);
   const groundGeo = new THREE.PlaneGeometry(groundW, groundH);
   const groundMat = new THREE.MeshStandardMaterial({
-    color: 0x222233, roughness: 0.9, metalness: 0.1, transparent: true, opacity: 0.8
+    color: 0xffffff, roughness: 0.9, metalness: 0, transparent: false
   });
   const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.rotation.x = -Math.PI / 2;
@@ -1072,8 +1073,9 @@ function init3D() {
   // Load map texture on top
   const textureLoader = new THREE.TextureLoader();
   textureLoader.load('mapa.png', (texture) => {
-    texture.repeat.set(1540/1600, (1120-80)/2000);
-    texture.offset.set(30/1600, 1 - 1120/2000);
+    // Use full image — legend at bottom is fine as reference
+    texture.repeat.set(1, 1);
+    texture.offset.set(0, 0);
     groundMat.map = texture;
     groundMat.needsUpdate = true;
     originalTexture = texture;
