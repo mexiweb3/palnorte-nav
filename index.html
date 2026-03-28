@@ -369,10 +369,16 @@ body {
   <div class="edit-hud" id="edit-hud" style="display:none">
     <div class="edit-selected" id="edit-selected">Toca un cubo para seleccionarlo</div>
     <div class="edit-actions" id="edit-actions" style="display:none">
-      <button class="edit-btn" onclick="resizeSelected(1.1)">+</button>
-      <button class="edit-btn" onclick="resizeSelected(0.9)">−</button>
-      <button class="edit-btn" onclick="taller(1.2)">↑ Alto</button>
-      <button class="edit-btn" onclick="taller(0.8)">↓ Alto</button>
+      <button class="edit-btn" onclick="rotateSelected(-Math.PI/16)">↺ Q</button>
+      <button class="edit-btn" onclick="rotateSelected(Math.PI/16)">↻ E</button>
+      <button class="edit-btn" onclick="resizeSelected(1.1)">+ Size</button>
+      <button class="edit-btn" onclick="resizeSelected(0.9)">− Size</button>
+      <button class="edit-btn" onclick="taller(1.15)">↑ Alto</button>
+      <button class="edit-btn" onclick="taller(0.85)">↓ Alto</button>
+      <button class="edit-btn" onclick="stretchX(1.1)">→ Ancho</button>
+      <button class="edit-btn" onclick="stretchX(0.9)">← Ancho</button>
+      <button class="edit-btn" onclick="stretchZ(1.1)">↕ Largo</button>
+      <button class="edit-btn" onclick="stretchZ(0.9)">↕ Corto</button>
     </div>
   </div>
 </div>
@@ -1612,11 +1618,33 @@ function taller(factor) {
   updateWireframe(name, selectedMesh);
 }
 
+function rotateSelected(angle) {
+  if (!selectedMesh) return;
+  selectedMesh.rotation.y += angle;
+  const name = meshToName.get(selectedMesh);
+  updateWireframe(name, selectedMesh);
+}
+
+function stretchX(factor) {
+  if (!selectedMesh) return;
+  selectedMesh.scale.x *= factor;
+  const name = meshToName.get(selectedMesh);
+  updateWireframe(name, selectedMesh);
+}
+
+function stretchZ(factor) {
+  if (!selectedMesh) return;
+  selectedMesh.scale.z *= factor;
+  const name = meshToName.get(selectedMesh);
+  updateWireframe(name, selectedMesh);
+}
+
 function updateWireframe(name, mesh) {
   const wf = nameToWireframe.get(name);
   if (wf) {
     wf.position.copy(mesh.position);
     wf.scale.copy(mesh.scale);
+    wf.rotation.copy(mesh.rotation);
   }
   const sp = nameToSprite.get(name);
   if (sp) {
@@ -1650,6 +1678,7 @@ function saveLayout() {
     layout[name] = {
       x: +mesh.position.x.toFixed(2),
       z: +mesh.position.z.toFixed(2),
+      rotY: +mesh.rotation.y.toFixed(3),
       scaleX: +mesh.scale.x.toFixed(2),
       scaleY: +mesh.scale.y.toFixed(2),
       scaleZ: +mesh.scale.z.toFixed(2),
@@ -1676,6 +1705,7 @@ function loadLayout() {
       if (layout[name]) {
         mesh.position.x = layout[name].x;
         mesh.position.z = layout[name].z;
+        mesh.rotation.y = layout[name].rotY || 0;
         mesh.scale.x = layout[name].scaleX || 1;
         mesh.scale.y = layout[name].scaleY || 1;
         mesh.scale.z = layout[name].scaleZ || 1;
@@ -1829,6 +1859,22 @@ updateGPSDot = function() {
   origUpdateGPS();
   if (threeInited) updateGPS3D();
 };
+
+// Keyboard controls for editor
+document.addEventListener('keydown', (e) => {
+  if (!editMode || !selectedMesh) return;
+  const name = meshToName.get(selectedMesh);
+  switch(e.key.toLowerCase()) {
+    case 'q': rotateSelected(-Math.PI / 16); break;
+    case 'e': rotateSelected(Math.PI / 16); break;
+    case 'w': selectedMesh.scale.z *= 1.1; updateWireframe(name, selectedMesh); break;
+    case 's': selectedMesh.scale.z *= 0.9; updateWireframe(name, selectedMesh); break;
+    case 'a': selectedMesh.scale.x *= 0.9; updateWireframe(name, selectedMesh); break;
+    case 'd': selectedMesh.scale.x *= 1.1; updateWireframe(name, selectedMesh); break;
+    case 'r': taller(1.1); break;
+    case 'f': taller(0.9); break;
+  }
+});
 
 // Register service worker
 if ('serviceWorker' in navigator) {
