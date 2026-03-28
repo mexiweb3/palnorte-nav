@@ -308,16 +308,20 @@ body {
 }
 .edit-btn:active { background: #ffaa00; color: #000; }
 .three-tooltip {
-  position: fixed; z-index: 95;
+  position: fixed; z-index: 250;
   background: rgba(10,10,10,0.95); border: 1px solid #00e5ff;
-  border-radius: 10px; padding: 10px 14px;
+  border-radius: 10px; padding: 12px 16px;
   font-size: 13px; color: #fff;
   pointer-events: none; display: none;
-  max-width: 220px;
+  max-width: 280px;
   backdrop-filter: blur(8px);
 }
-.three-tooltip h4 { margin: 0 0 4px; color: #00e5ff; font-size: 14px; }
-.three-tooltip p { margin: 0; color: #aaa; font-size: 12px; line-height: 1.4; }
+.three-tooltip h4 { margin: 0 0 6px; color: #00e5ff; font-size: 15px; }
+.three-tooltip p {
+  margin: 0; color: #ccc; font-size: 12px; line-height: 1.6;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  white-space: pre-wrap;
+}
 </style>
 </head>
 <body>
@@ -944,30 +948,121 @@ function gpsTo3D(lat, lng) {
 }
 
 // Structure info for tooltips
-const STRUCTURE_INFO = {
-  'Tecate Light': 'Escenario principal. The Warning 4:40, Simple Plan 6:00, Cadillacs 6:35, Turnstile 8:40, Kygo 9:25, Guns N\' Roses 11:25. La Dra. está en VIP justo al lado.',
-  'Tecate Original': 'Segundo escenario. Grupo Frontera 10:25, Allison 11:30. Mexi + Rani van a Frontera.',
-  'Fusión Telcel': 'Escenario electrónico/alternativo. Al extremo este del parque.',
-  'Club Social': 'Escenario mid-size. Cuco 8:00.',
-  'Acústico': 'Escenario íntimo. The Whitest Boy Alive 6:00 — Mexi + Rani.',
-  'Oasis': 'Escenario chill. Lasso 9:15, Ovy On The Drums 7:15.',
-  'Sorpresa Viva': 'Escenario sorpresa junto al VIP.',
-  "Pilo's Bar": 'Escenario bar con vibe relajado.',
-  'VIP': 'Zona VIP Tecate Light. Aquí se queda la Dra. toda la noche. Vista directa a Tecate Light.',
-  'Zona Ascendente': 'Zona premium. Servicios médicos cerca.',
-  'Hospitality': 'Zona hospitality, entre Arena y VIP.',
-  'Arena Monterrey': 'Recinto cerrado grande. No es escenario del festival.',
-  'Cintermex': 'Centro de convenciones. Acceso 1 está aquí — por donde entran.',
-  'Nave Lewis': 'Nave industrial histórica. Corredor entre Arena y escenarios centrales.',
-  'Auditorio': 'Auditorio del parque. Zona de Oasis y Patinadero cercanos.',
-  'Horno 3': 'Horno de fundición histórico — landmark icónico de Fundidora. 50m de alto.',
-  'Acceso 1': 'Entrada por Cintermex. La más cercana a E10. POR AQUÍ ENTRAN.',
-  'Acceso 4': 'Entrada Fundidora norte. Para VIP/Ascendente/Hospitality.',
-  'Acceso 5': 'Entrada E5 Fundidora.',
-  'Acceso 6': 'Entrada Plaza Sésamo. Cerca del metro.',
-  'Acceso 7': 'Entrada Puente Verde, extremo este.',
-  'E10': 'Estacionamiento oficial. $150/día. Entrar por Av. Constitución o calle Washington.',
+// Lineup por escenario con horarios oficiales
+const STAGE_LINEUP = {
+  'Tecate Light': [
+    { time: '14:20', end: '14:50', artist: 'La Pegatina' },
+    { time: '15:20', end: '16:00', artist: 'Paty Cantú' },
+    { time: '16:40', end: '17:30', artist: 'The Warning ⭐' },
+    { time: '18:00', end: '18:50', artist: 'Enjambre' },
+    { time: '19:35', end: '20:45', artist: 'Los Fabulosos Cadillacs ⭐' },
+    { time: '20:40', end: '21:45', artist: 'Turnstile ⭐' },
+    { time: '21:25', end: '22:35', artist: 'Kygo ⭐' },
+    { time: '23:25', end: '02:00', artist: 'Guns N\' Roses ⭐' },
+  ],
+  'Tecate Original': [
+    { time: '14:50', end: '15:30', artist: 'Kapanga' },
+    { time: '16:00', end: '16:45', artist: 'Judeline' },
+    { time: '17:20', end: '18:15', artist: 'Nothing But Thieves' },
+    { time: '18:55', end: '20:00', artist: 'Simple Plan' },
+    { time: '22:00', end: '23:00', artist: 'Cypress Hill' },
+    { time: '22:25', end: '23:30', artist: 'Grupo Frontera ⭐' },
+    { time: '23:30', end: '00:30', artist: 'Allison' },
+  ],
+  'Fusión Telcel': [
+    { time: '15:35', end: '16:20', artist: 'Miky Huidobro' },
+    { time: '17:00', end: '17:40', artist: 'Peces Raros' },
+    { time: '18:20', end: '19:20', artist: 'Esteman & Daniela Spalla' },
+    { time: '20:00', end: '21:00', artist: 'Cuco' },
+    { time: '20:45', end: '21:00', artist: '(set especial)' },
+  ],
+  'Oasis': [
+    { time: '16:05', end: '16:55', artist: 'Luck Ra' },
+    { time: '17:45', end: '18:45', artist: 'Elena Rose' },
+    { time: '18:50', end: '19:05', artist: '(set)' },
+    { time: '19:15', end: '20:25', artist: 'Ovy On The Drums' },
+    { time: '21:15', end: '22:30', artist: 'Lasso' },
+    { time: '23:30', end: '00:30', artist: 'El Bogueto' },
+  ],
+  'Club Social': [
+    { time: '15:00', end: '15:30', artist: 'Big Sempa' },
+    { time: '17:00', end: '18:00', artist: 'Kevis & Maykyy' },
+    { time: '18:00', end: '19:00', artist: 'Sickick' },
+    { time: '19:00', end: '20:15', artist: 'Bag Raiders' },
+    { time: '20:15', end: '21:30', artist: 'Parisi' },
+    { time: '21:30', end: '22:45', artist: 'Mariana Bo' },
+    { time: '22:45', end: '00:15', artist: 'Ahmed Spins' },
+    { time: '00:15', end: '01:30', artist: 'The Martinez Brothers' },
+  ],
+  'Acústico': [
+    { time: '15:30', end: '16:10', artist: 'Andrea Bejar' },
+    { time: '16:40', end: '17:20', artist: 'Nasa Histoires' },
+    { time: '18:00', end: '18:50', artist: 'The Whitest Boy Alive ⭐' },
+    { time: '19:40', end: '20:20', artist: 'Love of Lesbian' },
+    { time: '21:00', end: '21:50', artist: 'Volovàn' },
+    { time: '22:30', end: '23:30', artist: 'Camilo Séptimo' },
+  ],
+  'Sorpresa Viva': [
+    { time: '14:30', end: '15:05', artist: 'Monte Casino' },
+  ],
+  "Pilo's Bar": [
+    { time: '15:55', end: '17:25', artist: 'Good Ole Boys' },
+    { time: '18:00', end: '19:00', artist: 'Doble Filo' },
+    { time: '19:35', end: '21:05', artist: 'Toppaz' },
+    { time: '21:30', end: '23:00', artist: 'La Mole y Sus Amigos' },
+    { time: '23:40', end: '00:40', artist: 'KDT\'s de Linares' },
+    { time: '01:00', end: '02:00', artist: 'Salomón Robles' },
+  ],
 };
+
+function getStageInfo(name) {
+  const lineup = STAGE_LINEUP[name];
+  if (!lineup) {
+    // Non-stage buildings
+    const info = {
+      'VIP': 'Zona VIP Tecate Light\nLa Dra. se queda aquí toda la noche\nVista directa a Tecate Light',
+      'Zona Ascendente': 'Zona premium\nServicios médicos cerca',
+      'Hospitality': 'Zona hospitality',
+      'Arena Monterrey': 'Recinto cerrado\nNo es escenario del festival',
+      'Cintermex': 'Centro de convenciones\nAcceso 1 — POR AQUÍ ENTRAN',
+      'Nave Lewis': 'Nave industrial histórica\nCorredor entre Arena y escenarios',
+      'Auditorio': 'Auditorio del parque',
+      'Horno 3': 'Horno de fundición histórico\n50m de alto — landmark de Fundidora',
+      'Acceso 1': 'Entrada Cintermex\nLa más cercana a E10\nPOR AQUÍ ENTRAN',
+      'Acceso 4': 'Entrada Fundidora norte',
+      'Acceso 5': 'Entrada E5 Fundidora',
+      'Acceso 6': 'Entrada Plaza Sésamo\nCerca del metro',
+      'Acceso 7': 'Entrada Puente Verde',
+      'E10': 'Estacionamiento oficial\n$150/día\nAv. Constitución o calle Washington',
+    };
+    return info[name] || name;
+  }
+
+  // Find current/next act
+  const now = new Date();
+  const nowH = now.getHours();
+  const nowM = now.getMinutes();
+  const nowMin = (nowH < 6 ? nowH + 24 : nowH) * 60 + nowM;
+
+  let lines = [];
+  lineup.forEach(act => {
+    const [h, m] = act.time.split(':').map(Number);
+    const [eh, em] = act.end.split(':').map(Number);
+    const startMin = (h < 6 ? h + 24 : h) * 60 + m;
+    const endMin = (eh < 6 ? eh + 24 : eh) * 60 + em;
+
+    let prefix = '  ';
+    if (nowMin >= startMin && nowMin < endMin) prefix = '▶ ';
+    else if (nowMin < startMin) prefix = '  ';
+    else prefix = '✓ ';
+
+    lines.push(prefix + act.time + ' ' + act.artist);
+  });
+
+  return lines.join('\n');
+}
+
+const STRUCTURE_INFO = {}; // kept for compatibility
 
 // Building/structure definitions (GPS coords, dimensions in meters)
 const STRUCTURES = [
@@ -1213,10 +1308,11 @@ function init3D() {
 
   function showTooltip(x, y, name) {
     ttName.textContent = name;
-    ttInfo.textContent = STRUCTURE_INFO[name] || '';
+    const info = getStageInfo(name);
+    ttInfo.innerHTML = info.replace(/\n/g, '<br>');
     tooltip.style.display = 'block';
-    // Position tooltip above touch/click, keep on screen
-    const tw = 220, th = tooltip.offsetHeight || 80;
+    // Position tooltip, keep on screen
+    const tw = 260, th = tooltip.offsetHeight || 120;
     let tx = x - tw / 2;
     let ty = y - th - 20;
     if (tx < 8) tx = 8;
