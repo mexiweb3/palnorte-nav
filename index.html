@@ -1044,26 +1044,28 @@ function init3D() {
     scene.add(light);
   });
 
-  // Ground plane with map texture
+  // Ground plane — first create without texture, then add map
+  const groundW = (MAP_BOUNDS.gpsEast - MAP_BOUNDS.gpsWest) * M_PER_DEG_LNG * SCALE_3D;
+  const groundH = (MAP_BOUNDS.gpsNorth - MAP_BOUNDS.gpsSouth) * M_PER_DEG_LAT * SCALE_3D;
+  const groundGeo = new THREE.PlaneGeometry(groundW, groundH);
+  const groundMat = new THREE.MeshStandardMaterial({
+    color: 0x222233, roughness: 0.9, metalness: 0.1, transparent: true, opacity: 0.8
+  });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.1;
+  ground.receiveShadow = true;
+  scene.add(ground);
+  groundMeshRef = ground;
+
+  // Load map texture on top
   const textureLoader = new THREE.TextureLoader();
   textureLoader.load('mapa.png', (texture) => {
-    // Only use the map portion (top 56% of image = 1120/2000)
-    // Crop texture to map area only (pixels 30-1570 x, 80-1120 y of 1600x2000 image)
-    // Texture UV: y=0 is bottom of image (pixel row 2000), y=1 is top (pixel row 0)
-    texture.repeat.set(1540/1600, (1120-80)/2000);   // 0.9625, 0.52
-    texture.offset.set(30/1600, 1 - 1120/2000);       // 0.01875, 0.44
-    const groundGeo = new THREE.PlaneGeometry(
-      (MAP_BOUNDS.gpsEast - MAP_BOUNDS.gpsWest) * M_PER_DEG_LNG * SCALE_3D,
-      (MAP_BOUNDS.gpsNorth - MAP_BOUNDS.gpsSouth) * M_PER_DEG_LAT * SCALE_3D
-    );
-    const groundMat = new THREE.MeshStandardMaterial({
-      map: texture, roughness: 0.9, metalness: 0.1, transparent: true, opacity: 0.5
-    });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.1;
-    ground.receiveShadow = true;
-    scene.add(ground);
+    texture.repeat.set(1540/1600, (1120-80)/2000);
+    texture.offset.set(30/1600, 1 - 1120/2000);
+    groundMat.map = texture;
+    groundMat.needsUpdate = true;
+    originalTexture = texture;
   });
 
   // Grid helper
