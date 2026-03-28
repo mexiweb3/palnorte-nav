@@ -2282,10 +2282,21 @@ function topView() {
   updateCameraPos();
 }
 
+// Convert GPS → 2D pixel → 3D coords (consistent with manually placed buildings)
+function gpsTo3DCalibrated(lat, lng) {
+  // Step 1: GPS → 2D pixel (same as the 2D map)
+  const px = MAP_BOUNDS.imgLeft + (lng - MAP_BOUNDS.gpsWest) / (MAP_BOUNDS.gpsEast - MAP_BOUNDS.gpsWest) * (MAP_BOUNDS.imgRight - MAP_BOUNDS.imgLeft);
+  const py = MAP_BOUNDS.imgTop + (lat - MAP_BOUNDS.gpsNorth) / (MAP_BOUNDS.gpsSouth - MAP_BOUNDS.gpsNorth) * (MAP_BOUNDS.imgBottom - MAP_BOUNDS.imgTop);
+  // Step 2: 2D pixel → 3D (linear fit from 12 reference buildings)
+  const x = 0.097517 * px + 0.010743 * py + -80.1597;
+  const z = 0.010831 * px + 0.103312 * py + -103.6663;
+  return { x, z };
+}
+
 function updateGPS3D() {
   if (!gpsMarker3D || userLat === null) return;
   if (isInsideMap(userLat, userLng)) {
-    const pos = gpsTo3D(userLat, userLng);
+    const pos = gpsTo3DCalibrated(userLat, userLng);
     gpsMarker3D.position.set(pos.x, 7.5, pos.z);
     gpsMarker3D.visible = true;
   } else {
@@ -2297,7 +2308,7 @@ function locateIn3D() {
   if (userLat === null || !isInsideMap(userLat, userLng)) {
     return;
   }
-  const pos = gpsTo3D(userLat, userLng);
+  const pos = gpsTo3DCalibrated(userLat, userLng);
   camAngle = Math.atan2(pos.x, pos.z) + Math.PI;
   camPitch = Math.PI / 6;
   camDist = 40;
