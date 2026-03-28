@@ -448,6 +448,7 @@ body {
     <button class="three-btn" onclick="locateIn3D()">📍</button>
     <button class="three-btn" id="btn-save" onclick="saveLayout()" style="display:none">💾</button>
     <button class="three-btn" id="btn-layer" onclick="toggleMapLayer()">🗺</button>
+    <button class="three-btn" id="btn-ground-edit" onclick="toggleGroundEdit()">🏗</button>
   </div>
   <div class="edit-hud" id="edit-hud" style="display:none">
     <div class="edit-selected" id="edit-selected">Toca un cubo para seleccionarlo</div>
@@ -1292,6 +1293,19 @@ const nameToWireframe = new Map();
 const nameToSprite = new Map();
 let camAngle = Math.PI / 4, camPitch = Math.PI / 5, camDist = 120;
 let camTargetX = 0, camTargetZ = 0;
+let groundOffX = 0, groundOffZ = 0, groundScale3D = 1;
+let ground3DEditMode = false;
+
+// Load saved ground position
+(function loadGroundPos() {
+  const saved = localStorage.getItem('ground3d-pos');
+  if (saved) {
+    try {
+      const p = JSON.parse(saved);
+      groundOffX = p.x || 0; groundOffZ = p.z || 0; groundScale3D = p.s || 1;
+    } catch(e) {}
+  }
+})();
 let gpsMarker3D = null;
 
 // Convert GPS to 3D world coords (centered on Fundidora)
@@ -1532,7 +1546,8 @@ function init3D() {
   });
   const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.rotation.x = -Math.PI / 2;
-  ground.position.y = -0.1;
+  ground.position.set(groundOffX, -0.1, groundOffZ);
+  ground.scale.set(groundScale3D, groundScale3D, groundScale3D);
   ground.receiveShadow = true;
   scene.add(ground);
   groundMeshRef = ground;
@@ -2251,6 +2266,45 @@ function toggleMapLayer() {
   }
 }
 
+// ══════════════════════════════════════════
+// GROUND EDIT — move/scale the floor map
+// ══════════════════════════════════════════
+function toggleGroundEdit() {
+  ground3DEditMode = !ground3DEditMode;
+  const btn = document.getElementById('btn-ground-edit');
+  const label = document.querySelector('.three-label');
+  if (ground3DEditMode) {
+    btn.style.background = '#00e5ff';
+    btn.style.color = '#000';
+    label.textContent = '🏗 Mover piso — Flechas: mover, PageUp/Down: escalar, S: guardar';
+  } else {
+    btn.style.background = '';
+    btn.style.color = '#fff';
+    label.textContent = 'OK — 3D rendering';
+  }
+}
+
+function moveGround(dx, dz) {
+  if (!groundMeshRef) return;
+  groundOffX += dx;
+  groundOffZ += dz;
+  groundMeshRef.position.x = groundOffX;
+  groundMeshRef.position.z = groundOffZ;
+}
+
+function scaleGround(factor) {
+  if (!groundMeshRef) return;
+  groundScale3D *= factor;
+  groundMeshRef.scale.set(groundScale3D, groundScale3D, groundScale3D);
+}
+
+function saveGroundPos() {
+  localStorage.setItem('ground3d-pos', JSON.stringify({ x: groundOffX, z: groundOffZ, s: groundScale3D }));
+  const label = document.querySelector('.three-label');
+  label.textContent = '💾 Posición del piso guardada';
+  setTimeout(() => { if (ground3DEditMode) label.textContent = '🏗 Mover piso — Flechas: mover, PageUp/Down: escalar, S: guardar'; }, 1500);
+}
+
 function toggleNavMode() {
   const btn = document.getElementById('btn-mode');
   const label = document.querySelector('.three-label');
@@ -2344,7 +2398,29 @@ function satKeyLoop() {
   satAnimFrame = requestAnimationFrame(satKeyLoop);
 }
 
+// Ground 3D key loop
+function ground3DKeyLoop() {
+  if (!ground3DEditMode || keysDown.size === 0) { satAnimFrame = null; return; }
+  const step = keysDown.has('Shift') ? 2 : 0.5;
+  if (keysDown.has('ArrowUp')) moveGround(0, -step);
+  if (keysDown.has('ArrowDown')) moveGround(0, step);
+  if (keysDown.has('ArrowLeft')) moveGround(-step, 0);
+  if (keysDown.has('ArrowRight')) moveGround(step, 0);
+  if (keysDown.has('PageUp')) scaleGround(1.005);
+  if (keysDown.has('PageDown')) scaleGround(0.995);
+  satAnimFrame = requestAnimationFrame(ground3DKeyLoop);
+}
+
 document.addEventListener('keydown', (e) => {
+  // Ground 3D edit mode
+  if (ground3DEditMode && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Shift'].includes(e.key)) {
+    e.preventDefault();
+    keysDown.add(e.key);
+    if (!satAnimFrame) satAnimFrame = requestAnimationFrame(ground3DKeyLoop);
+    return;
+  }
+  if (ground3DEditMode && (e.key === 's' || e.key === 'S')) { saveGroundPos(); return; }
+
   // Satellite continuous movement
   if (sat2DVisible && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Shift'].includes(e.key)) {
     e.preventDefault();
