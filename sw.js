@@ -1,8 +1,9 @@
-const CACHE_NAME = 'palnorte-v3';
+const CACHE_NAME = 'palnorte-v4';
 const ASSETS = [
   './',
   './index.html',
   './mapa.png',
+  './agenda.png',
   './manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'
 ];
