@@ -996,41 +996,43 @@ const STRUCTURES = [
 ];
 
 function init3D() {
+  const dbg = document.querySelector('.three-label');
+  try {
   if (threeInited) { updateGPS3D(); return; }
 
   if (typeof THREE === 'undefined') {
-    document.querySelector('.three-label').textContent = 'Cargando Three.js...';
+    dbg.textContent = 'Cargando Three.js...';
     const s = document.createElement('script');
     s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
     s.onload = () => init3D();
-    s.onerror = () => {
-      document.querySelector('.three-label').textContent = 'Error: no se pudo cargar Three.js. Necesitas internet la primera vez.';
-    };
+    s.onerror = () => { dbg.textContent = 'ERROR: no se pudo cargar Three.js'; };
     document.head.appendChild(s);
     return;
   }
 
+  dbg.textContent = '1. Three.js loaded';
   threeInited = true;
 
   const viewport = document.getElementById('three-viewport');
   const w = window.innerWidth, h = window.innerHeight;
+  dbg.textContent = '2. Viewport: ' + w + 'x' + h;
 
-  // Scene
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0a0a0f);
   scene.fog = new THREE.FogExp2(0x0a0a0f, 0.003);
+  dbg.textContent = '3. Scene created';
 
-  // Camera
   camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 1000);
   updateCameraPos();
+  dbg.textContent = '4. Camera ok';
 
-  // Renderer — let Three.js create its own canvas
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(w, h);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   viewport.appendChild(renderer.domElement);
   const canvas = renderer.domElement;
+  dbg.textContent = '5. Renderer ok ' + canvas.width + 'x' + canvas.height;
 
   // Lights
   const ambient = new THREE.AmbientLight(0x222233, 0.6);
@@ -1493,6 +1495,8 @@ function init3D() {
   }
   animate();
   updateGPS3D();
+  dbg.textContent = 'OK — 3D rendering';
+  } catch(e) { dbg.textContent = 'ERROR: ' + e.message + ' @ ' + e.stack?.split('\n')[1]; }
 }
 
 function updateCameraPos() {
