@@ -278,6 +278,17 @@ body {
 .legend-dot {
   width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0;
 }
+.three-tooltip {
+  position: fixed; z-index: 95;
+  background: rgba(10,10,10,0.95); border: 1px solid #00e5ff;
+  border-radius: 10px; padding: 10px 14px;
+  font-size: 13px; color: #fff;
+  pointer-events: none; display: none;
+  max-width: 220px;
+  backdrop-filter: blur(8px);
+}
+.three-tooltip h4 { margin: 0 0 4px; color: #00e5ff; font-size: 14px; }
+.three-tooltip p { margin: 0; color: #aaa; font-size: 12px; line-height: 1.4; }
 </style>
 </head>
 <body>
@@ -311,7 +322,12 @@ body {
     <div><span class="legend-dot" style="background:#00ff88"></span> Tu ubicación</div>
   </div>
   <canvas id="three-canvas"></canvas>
+  <div class="three-tooltip" id="three-tooltip">
+    <h4 id="tt-name"></h4>
+    <p id="tt-info"></p>
+  </div>
   <div class="three-controls">
+    <button class="three-btn" id="btn-mode" onclick="toggleNavMode()">🚶</button>
     <button class="three-btn" onclick="resetCamera()">🏠</button>
     <button class="three-btn" onclick="topView()">⬆</button>
     <button class="three-btn" onclick="locateIn3D()">📍</button>
@@ -863,6 +879,32 @@ function gpsTo3D(lat, lng) {
   return { x, z };
 }
 
+// Structure info for tooltips
+const STRUCTURE_INFO = {
+  'Tecate Light': 'Escenario principal. The Warning 4:40, Simple Plan 6:00, Cadillacs 6:35, Turnstile 8:40, Kygo 9:25, Guns N\' Roses 11:25. La Dra. está en VIP justo al lado.',
+  'Tecate Original': 'Segundo escenario. Grupo Frontera 10:25, Allison 11:30. Mexi + Rani van a Frontera.',
+  'Fusión Telcel': 'Escenario electrónico/alternativo. Al extremo este del parque.',
+  'Club Social': 'Escenario mid-size. Cuco 8:00.',
+  'Acústico': 'Escenario íntimo. The Whitest Boy Alive 6:00 — Mexi + Rani.',
+  'Oasis': 'Escenario chill. Lasso 9:15, Ovy On The Drums 7:15.',
+  'Sorpresa Viva': 'Escenario sorpresa junto al VIP.',
+  "Pilo's Bar": 'Escenario bar con vibe relajado.',
+  'VIP': 'Zona VIP Tecate Light. Aquí se queda la Dra. toda la noche. Vista directa a Tecate Light.',
+  'Zona Ascendente': 'Zona premium. Servicios médicos cerca.',
+  'Hospitality': 'Zona hospitality, entre Arena y VIP.',
+  'Arena Monterrey': 'Recinto cerrado grande. No es escenario del festival.',
+  'Cintermex': 'Centro de convenciones. Acceso 1 está aquí — por donde entran.',
+  'Nave Lewis': 'Nave industrial histórica. Corredor entre Arena y escenarios centrales.',
+  'Auditorio': 'Auditorio del parque. Zona de Oasis y Patinadero cercanos.',
+  'Horno 3': 'Horno de fundición histórico — landmark icónico de Fundidora. 50m de alto.',
+  'Acceso 1': 'Entrada por Cintermex. La más cercana a E10. POR AQUÍ ENTRAN.',
+  'Acceso 4': 'Entrada Fundidora norte. Para VIP/Ascendente/Hospitality.',
+  'Acceso 5': 'Entrada E5 Fundidora.',
+  'Acceso 6': 'Entrada Plaza Sésamo. Cerca del metro.',
+  'Acceso 7': 'Entrada Puente Verde, extremo este.',
+  'E10': 'Estacionamiento oficial. $150/día. Entrar por Av. Constitución o calle Washington.',
+};
+
 // Building/structure definitions (GPS coords, dimensions in meters)
 const STRUCTURES = [
   // ── Escenarios (rojo/rosa) ──
@@ -946,14 +988,16 @@ function init3D() {
   const textureLoader = new THREE.TextureLoader();
   textureLoader.load('mapa.png', (texture) => {
     // Only use the map portion (top 56% of image = 1120/2000)
-    texture.repeat.set(1, 0.56);
-    texture.offset.set(0, 0.44);
+    // Crop texture to map area only (pixels 30-1570 x, 80-1120 y of 1600x2000 image)
+    // Texture UV: y=0 is bottom of image (pixel row 2000), y=1 is top (pixel row 0)
+    texture.repeat.set(1540/1600, (1120-80)/2000);   // 0.9625, 0.52
+    texture.offset.set(30/1600, 1 - 1120/2000);       // 0.01875, 0.44
     const groundGeo = new THREE.PlaneGeometry(
       (MAP_BOUNDS.gpsEast - MAP_BOUNDS.gpsWest) * M_PER_DEG_LNG * SCALE_3D,
       (MAP_BOUNDS.gpsNorth - MAP_BOUNDS.gpsSouth) * M_PER_DEG_LAT * SCALE_3D
     );
     const groundMat = new THREE.MeshStandardMaterial({
-      map: texture, roughness: 0.9, metalness: 0.1, transparent: true, opacity: 0.4
+      map: texture, roughness: 0.9, metalness: 0.1, transparent: true, opacity: 0.5
     });
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
@@ -1061,55 +1105,171 @@ function init3D() {
   gpsMarker3D.visible = false;
   scene.add(gpsMarker3D);
 
-  // Touch controls for orbit
+  // ── Raycaster for tooltips ──
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  const meshToName = new Map();
+
+  // Store mesh references
+  scene.children.forEach(child => {
+    if (child.isMesh && child.geometry && child.geometry.type === 'BoxGeometry') {
+      // find matching structure by position
+      STRUCTURES.forEach(s => {
+        const p = gpsTo3D(s.lat, s.lng);
+        if (Math.abs(child.position.x - p.x) < 1 && Math.abs(child.position.z - p.z) < 1) {
+          meshToName.set(child, s.name);
+        }
+      });
+    }
+  });
+
+  const tooltip = document.getElementById('three-tooltip');
+  const ttName = document.getElementById('tt-name');
+  const ttInfo = document.getElementById('tt-info');
+
+  function showTooltip(x, y, name) {
+    ttName.textContent = name;
+    ttInfo.textContent = STRUCTURE_INFO[name] || '';
+    tooltip.style.display = 'block';
+    // Position tooltip above touch/click, keep on screen
+    const tw = 220, th = tooltip.offsetHeight || 80;
+    let tx = x - tw / 2;
+    let ty = y - th - 20;
+    if (tx < 8) tx = 8;
+    if (tx + tw > window.innerWidth - 8) tx = window.innerWidth - tw - 8;
+    if (ty < 8) ty = y + 20;
+    tooltip.style.left = tx + 'px';
+    tooltip.style.top = ty + 'px';
+  }
+
+  function hideTooltip() { tooltip.style.display = 'none'; }
+
+  function raycast(clientX, clientY) {
+    pointer.x = (clientX / window.innerWidth) * 2 - 1;
+    pointer.y = -(clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const intersects = raycaster.intersectObjects(scene.children, false);
+    for (const hit of intersects) {
+      const name = meshToName.get(hit.object);
+      if (name) return { name, x: clientX, y: clientY };
+    }
+    return null;
+  }
+
+  // ── Navigation modes ──
+  let navMode = 'orbit'; // 'orbit' or 'walk'
+  let walkX = 0, walkZ = 0, walkAngle = 0;
+  let walkJoystickActive = false;
+  let walkJoystickStart = null;
+
+  // ── Touch controls (mobile-first) ──
   let touchStart = null, touchStartAngle, touchStartPitch, touchStartDist;
   let lastTouchDist3D = 0;
+  let touchTapTime = 0;
+  let touchMoved = false;
 
   canvas.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) {
-      touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      touchStartAngle = camAngle;
-      touchStartPitch = camPitch;
-    } else if (e.touches.length === 2) {
-      lastTouchDist3D = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      touchStartDist = camDist;
+    touchMoved = false;
+    if (navMode === 'orbit') {
+      if (e.touches.length === 1) {
+        touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        touchStartAngle = camAngle;
+        touchStartPitch = camPitch;
+        touchTapTime = Date.now();
+      } else if (e.touches.length === 2) {
+        lastTouchDist3D = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        touchStartDist = camDist;
+      }
+    } else {
+      // Walk mode: left half = joystick (move), right half = look
+      const x = e.touches[0].clientX;
+      if (x < window.innerWidth / 2) {
+        walkJoystickActive = true;
+        walkJoystickStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      } else {
+        touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        touchStartAngle = walkAngle;
+      }
+      touchTapTime = Date.now();
     }
   }, { passive: true });
 
   canvas.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 1 && touchStart) {
-      const dx = e.touches[0].clientX - touchStart.x;
-      const dy = e.touches[0].clientY - touchStart.y;
-      camAngle = touchStartAngle - dx * 0.005;
-      camPitch = Math.max(0.05, Math.min(Math.PI / 2.1, touchStartPitch + dy * 0.005));
-      updateCameraPos();
-    } else if (e.touches.length === 2) {
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      camDist = Math.max(20, Math.min(250, touchStartDist * (lastTouchDist3D / dist)));
-      updateCameraPos();
+    touchMoved = true;
+    if (navMode === 'orbit') {
+      if (e.touches.length === 1 && touchStart) {
+        const dx = e.touches[0].clientX - touchStart.x;
+        const dy = e.touches[0].clientY - touchStart.y;
+        camAngle = touchStartAngle - dx * 0.005;
+        camPitch = Math.max(0.05, Math.min(Math.PI / 2.1, touchStartPitch + dy * 0.005));
+        updateCameraPos();
+      } else if (e.touches.length === 2) {
+        const dist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        camDist = Math.max(20, Math.min(250, touchStartDist * (lastTouchDist3D / dist)));
+        updateCameraPos();
+      }
+    } else {
+      // Walk mode
+      if (walkJoystickActive && walkJoystickStart) {
+        const dx = e.touches[0].clientX - walkJoystickStart.x;
+        const dy = e.touches[0].clientY - walkJoystickStart.y;
+        const speed = 0.4;
+        walkX += (-Math.sin(walkAngle) * -dy + Math.cos(walkAngle) * dx) * speed * 0.02;
+        walkZ += (-Math.cos(walkAngle) * -dy - Math.sin(walkAngle) * dx) * speed * 0.02;
+      } else if (touchStart) {
+        const dx = e.touches[0].clientX - touchStart.x;
+        walkAngle = touchStartAngle - dx * 0.005;
+      }
     }
   }, { passive: true });
 
-  // Mouse controls (desktop)
+  canvas.addEventListener('touchend', (e) => {
+    // Tap to show tooltip
+    if (!touchMoved && Date.now() - touchTapTime < 300 && touchStart) {
+      const hit = raycast(touchStart.x, touchStart.y);
+      if (hit) showTooltip(hit.x, hit.y, hit.name);
+      else hideTooltip();
+    }
+    touchStart = null;
+    walkJoystickActive = false;
+    walkJoystickStart = null;
+  }, { passive: true });
+
+  // Mouse controls (desktop fallback)
   let mouseDown = false, mouseStartX, mouseStartY, mouseStartAngle, mouseStartPitch;
   canvas.addEventListener('mousedown', (e) => {
-    mouseDown = true;
+    mouseDown = true; touchMoved = false;
     mouseStartX = e.clientX; mouseStartY = e.clientY;
     mouseStartAngle = camAngle; mouseStartPitch = camPitch;
   });
   canvas.addEventListener('mousemove', (e) => {
-    if (!mouseDown) return;
-    camAngle = mouseStartAngle - (e.clientX - mouseStartX) * 0.005;
-    camPitch = Math.max(0.05, Math.min(Math.PI / 2.1, mouseStartPitch + (e.clientY - mouseStartY) * 0.005));
-    updateCameraPos();
+    if (mouseDown) {
+      touchMoved = true;
+      if (navMode === 'orbit') {
+        camAngle = mouseStartAngle - (e.clientX - mouseStartX) * 0.005;
+        camPitch = Math.max(0.05, Math.min(Math.PI / 2.1, mouseStartPitch + (e.clientY - mouseStartY) * 0.005));
+        updateCameraPos();
+      }
+    }
+    // Hover tooltip (desktop)
+    const hit = raycast(e.clientX, e.clientY);
+    if (hit) { showTooltip(hit.x, hit.y, hit.name); canvas.style.cursor = 'pointer'; }
+    else { hideTooltip(); canvas.style.cursor = 'grab'; }
   });
-  canvas.addEventListener('mouseup', () => { mouseDown = false; });
+  canvas.addEventListener('mouseup', (e) => {
+    if (!touchMoved) {
+      const hit = raycast(e.clientX, e.clientY);
+      if (hit) showTooltip(hit.x, hit.y, hit.name);
+      else hideTooltip();
+    }
+    mouseDown = false;
+  });
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     camDist = Math.max(20, Math.min(250, camDist + e.deltaY * 0.1));
@@ -1124,19 +1284,50 @@ function init3D() {
     renderer.setSize(w, h);
   });
 
+  // Remap meshes after scene is built
+  setTimeout(() => {
+    scene.children.forEach(child => {
+      if (child.isMesh && child.geometry && child.geometry.type === 'BoxGeometry') {
+        STRUCTURES.forEach(s => {
+          const p = gpsTo3D(s.lat, s.lng);
+          if (Math.abs(child.position.x - p.x) < 1 && Math.abs(child.position.z - p.z) < 1) {
+            meshToName.set(child, s.name);
+          }
+        });
+      }
+    });
+  }, 100);
+
   // Animate
   function animate() {
     requestAnimationFrame(animate);
+
+    // Walk mode camera update
+    if (navMode === 'walk') {
+      camera.position.set(walkX, 2.5, walkZ); // eye height ~2.5 in 3D units
+      camera.lookAt(
+        walkX - Math.sin(walkAngle) * 10,
+        2.5,
+        walkZ - Math.cos(walkAngle) * 10
+      );
+    }
+
     // Gentle stage pulse
     const t = Date.now() * 0.001;
     scene.children.forEach(child => {
       if (child.isMesh && child.material && child.material.emissive) {
         const r = child.material.emissive.r;
-        if (r > 0.15) { // only stages
+        if (r > 0.15) {
           child.material.emissiveIntensity = 0.5 + 0.3 * Math.sin(t * 2 + child.position.x);
         }
       }
     });
+
+    // GPS marker pulse
+    if (gpsMarker3D && gpsMarker3D.visible) {
+      gpsMarker3D.material.emissiveIntensity = 0.6 + 0.4 * Math.sin(t * 3);
+    }
+
     renderer.render(scene, camera);
   }
   animate();
@@ -1151,7 +1342,26 @@ function updateCameraPos() {
   camera.lookAt(0, 2, 0);
 }
 
+function toggleNavMode() {
+  const btn = document.getElementById('btn-mode');
+  const label = document.querySelector('.three-label');
+  if (navMode === 'orbit') {
+    navMode = 'walk';
+    btn.textContent = '🌐';
+    // Start walking from VIP area
+    const vipPos = gpsTo3D(25.6800, -100.2878);
+    walkX = vipPos.x; walkZ = vipPos.z; walkAngle = 0;
+    label.textContent = '🚶 Caminando — izq: mover, der: girar';
+  } else {
+    navMode = 'orbit';
+    btn.textContent = '🚶';
+    label.textContent = 'Fundidora 3D — arrastra para rotar, pinch para zoom';
+    updateCameraPos();
+  }
+}
+
 function resetCamera() {
+  if (navMode === 'walk') { toggleNavMode(); }
   camAngle = Math.PI / 4; camPitch = Math.PI / 5; camDist = 120;
   updateCameraPos();
 }
