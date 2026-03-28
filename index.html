@@ -76,11 +76,25 @@ body {
   z-index: 55; pointer-events: none;
 }
 .sat-layer {
-  position: absolute; top: 0; left: 0;
-  width: 1600px; height: 2000px;
+  position: absolute;
   display: none; z-index: 0;
   pointer-events: none;
+  transform-origin: 0 0;
 }
+.sat-controls {
+  position: fixed; bottom: 130px; left: 12px; right: 12px;
+  background: rgba(10,10,10,0.95); border: 1px solid #00e5ff;
+  border-radius: 12px; padding: 10px; z-index: 200;
+  display: none; backdrop-filter: blur(8px);
+}
+.sat-controls-title { font-size: 11px; color: #00e5ff; margin-bottom: 8px; text-align: center; }
+.sat-row { display: flex; gap: 6px; justify-content: center; margin-bottom: 6px; flex-wrap: wrap; }
+.sat-btn {
+  background: #222; border: 1px solid #444; color: #fff;
+  padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  min-width: 36px; text-align: center;
+}
+.sat-btn:active { background: #00e5ff; color: #000; }
 #map-img {
   position: relative; z-index: 1;
 }
@@ -380,6 +394,24 @@ body {
     <button class="map-btn" id="btn-zoom-out" onclick="zoomOut()">−</button>
     <button class="map-btn" id="btn-calibrate" onclick="startCalibration()">🎯</button>
     <input type="range" id="map-opacity" min="0" max="100" value="70" oninput="setMapOpacity(this.value)" class="opacity-slider" style="display:none">
+  </div>
+  <div class="sat-controls" id="sat-controls">
+    <div class="sat-controls-title">Ajustar satelital</div>
+    <div class="sat-row">
+      <button class="sat-btn" onclick="moveSat(0,-10)">↑</button>
+    </div>
+    <div class="sat-row">
+      <button class="sat-btn" onclick="moveSat(-10,0)">←</button>
+      <button class="sat-btn" onclick="moveSat(10,0)">→</button>
+    </div>
+    <div class="sat-row">
+      <button class="sat-btn" onclick="moveSat(0,10)">↓</button>
+    </div>
+    <div class="sat-row">
+      <button class="sat-btn" onclick="scaleSat(1.05)">+ Grande</button>
+      <button class="sat-btn" onclick="scaleSat(0.95)">− Chico</button>
+      <button class="sat-btn" onclick="saveSatPos()">💾</button>
+    </div>
   </div>
   <div class="calibration-hud" id="cal-hud" style="display:none">
     <div id="cal-text">Párate en un punto conocido y tócalo en el mapa</div>
@@ -884,6 +916,7 @@ function toggle2DSat() {
               satImg.src = canvas.toDataURL();
               satImg.style.display = 'block';
               sat2DLoaded = true;
+              applySatTransform();
             }
           };
           img.onerror = () => { loaded++; };
@@ -891,19 +924,64 @@ function toggle2DSat() {
       }
     } else {
       satImg.style.display = 'block';
+      applySatTransform();
     }
     mapImg.style.opacity = '0.7';
+    document.getElementById('sat-controls').style.display = 'block';
   } else {
     btn.style.background = '';
     btn.style.color = '#fff';
     slider.style.display = 'none';
     satImg.style.display = 'none';
     mapImg.style.opacity = '1';
+    document.getElementById('sat-controls').style.display = 'none';
   }
 }
 
 function setMapOpacity(val) {
   document.getElementById('map-img').style.opacity = val / 100;
+}
+
+// ══════════════════════════════════════════
+// Satellite position adjustment
+// ══════════════════════════════════════════
+let satOffX = 0, satOffY = 0, satScale = 1;
+
+// Load saved satellite position
+(function loadSatPos() {
+  const saved = localStorage.getItem('sat-pos');
+  if (saved) {
+    try {
+      const p = JSON.parse(saved);
+      satOffX = p.x || 0; satOffY = p.y || 0; satScale = p.s || 1;
+    } catch(e) {}
+  }
+})();
+
+function applySatTransform() {
+  const img = document.getElementById('sat-img');
+  img.style.left = satOffX + 'px';
+  img.style.top = satOffY + 'px';
+  img.style.transform = `scale(${satScale})`;
+}
+
+function moveSat(dx, dy) {
+  satOffX += dx;
+  satOffY += dy;
+  applySatTransform();
+}
+
+function scaleSat(factor) {
+  satScale *= factor;
+  applySatTransform();
+}
+
+function saveSatPos() {
+  localStorage.setItem('sat-pos', JSON.stringify({ x: satOffX, y: satOffY, s: satScale }));
+  document.querySelector('.sat-controls-title').textContent = '💾 Posición guardada';
+  setTimeout(() => {
+    document.querySelector('.sat-controls-title').textContent = 'Ajustar satelital';
+  }, 1500);
 }
 
 // ══════════════════════════════════════════
