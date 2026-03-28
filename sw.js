@@ -1,9 +1,10 @@
-const CACHE_NAME = 'palnorte-v1';
+const CACHE_NAME = 'palnorte-v2';
 const ASSETS = [
   './',
   './index.html',
   './mapa.png',
-  './manifest.json'
+  './manifest.json',
+  'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'
 ];
 
 self.addEventListener('install', (e) => {
