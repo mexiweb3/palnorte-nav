@@ -611,26 +611,57 @@ function startGPS() {
   );
 }
 
+function isInsideMap(lat, lng) {
+  const b = MAP_BOUNDS;
+  const margin = 0.002; // ~200m buffer
+  return lat <= b.gpsNorth + margin && lat >= b.gpsSouth - margin &&
+         lng >= b.gpsWest - margin && lng <= b.gpsEast + margin;
+}
+
+function distanceToFundidora(lat, lng) {
+  const centerLat = (MAP_BOUNDS.gpsNorth + MAP_BOUNDS.gpsSouth) / 2;
+  const centerLng = (MAP_BOUNDS.gpsWest + MAP_BOUNDS.gpsEast) / 2;
+  const dLat = (lat - centerLat) * 111320;
+  const dLng = (lng - centerLng) * 111320 * Math.cos(lat * Math.PI / 180);
+  const m = Math.sqrt(dLat * dLat + dLng * dLng);
+  return m < 1000 ? `${Math.round(m)}m` : `${(m/1000).toFixed(1)}km`;
+}
+
 function updateGPSDot() {
   if (userLat === null) return;
   const pos = gpsToPixel(userLat, userLng);
-  gpsDot.style.left = pos.x + 'px';
-  gpsDot.style.top = pos.y + 'px';
-  gpsDot.style.display = 'block';
+  const inside = isInsideMap(userLat, userLng);
 
-  // Accuracy circle
-  const metersPerPixelLat = (MAP_BOUNDS.gpsNorth - MAP_BOUNDS.gpsSouth) * 111320 / (MAP_BOUNDS.imgBottom - MAP_BOUNDS.imgTop);
-  const accRadius = userAccuracy / metersPerPixelLat;
-  gpsAccEl.style.left = pos.x + 'px';
-  gpsAccEl.style.top = pos.y + 'px';
-  gpsAccEl.style.width = accRadius * 2 + 'px';
-  gpsAccEl.style.height = accRadius * 2 + 'px';
-  gpsAccEl.style.display = 'block';
+  if (inside) {
+    gpsDot.style.left = pos.x + 'px';
+    gpsDot.style.top = pos.y + 'px';
+    gpsDot.style.display = 'block';
+    gpsText.textContent = `GPS activo — precisión ${Math.round(userAccuracy)}m`;
+
+    // Accuracy circle
+    const metersPerPixelLat = (MAP_BOUNDS.gpsNorth - MAP_BOUNDS.gpsSouth) * 111320 / (MAP_BOUNDS.imgBottom - MAP_BOUNDS.imgTop);
+    const accRadius = userAccuracy / metersPerPixelLat;
+    gpsAccEl.style.left = pos.x + 'px';
+    gpsAccEl.style.top = pos.y + 'px';
+    gpsAccEl.style.width = accRadius * 2 + 'px';
+    gpsAccEl.style.height = accRadius * 2 + 'px';
+    gpsAccEl.style.display = 'block';
+  } else {
+    gpsDot.style.display = 'none';
+    gpsAccEl.style.display = 'none';
+    const dist = distanceToFundidora(userLat, userLng);
+    gpsText.textContent = `📍 Estás a ${dist} de Fundidora`;
+  }
 }
 
 function centerOnUser() {
   if (userLat === null) {
     gpsText.textContent = 'Esperando señal GPS...';
+    return;
+  }
+  if (!isInsideMap(userLat, userLng)) {
+    const dist = distanceToFundidora(userLat, userLng);
+    gpsText.textContent = `📍 Estás a ${dist} de Fundidora — el punto aparece cuando llegues`;
     return;
   }
   const pos = gpsToPixel(userLat, userLng);
