@@ -809,7 +809,7 @@ function startGPS() {
       userAccuracy = pos.coords.accuracy;
       gpsStatusDot.classList.add('active');
       gpsStatusDot.classList.remove('error');
-      gpsText.textContent = `GPS activo — precisión ${Math.round(userAccuracy)}m`;
+      gpsText.textContent = `GPS ${userLat.toFixed(5)}, ${userLng.toFixed(5)} — ${Math.round(userAccuracy)}m`;
       updateGPSDot();
     },
     (err) => {
@@ -823,7 +823,7 @@ function startGPS() {
 
 function isInsideMap(lat, lng) {
   const b = MAP_BOUNDS;
-  const margin = 0.002; // ~200m buffer
+  const margin = 0.01; // ~1km buffer
   return lat <= b.gpsNorth + margin && lat >= b.gpsSouth - margin &&
          lng >= b.gpsWest - margin && lng <= b.gpsEast + margin;
 }
@@ -846,7 +846,7 @@ function updateGPSDot() {
     gpsDot.style.left = pos.x + 'px';
     gpsDot.style.top = pos.y + 'px';
     gpsDot.style.display = 'block';
-    gpsText.textContent = `GPS activo — precisión ${Math.round(userAccuracy)}m`;
+    gpsText.textContent = `GPS ${userLat.toFixed(5)}, ${userLng.toFixed(5)} — ${Math.round(userAccuracy)}m`;
 
     // Accuracy circle
     const metersPerPixelLat = (MAP_BOUNDS.gpsNorth - MAP_BOUNDS.gpsSouth) * 111320 / (MAP_BOUNDS.imgBottom - MAP_BOUNDS.imgTop);
