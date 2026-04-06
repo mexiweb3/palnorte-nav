@@ -468,9 +468,8 @@ body {
 
 <!-- ══════ AGENDA PANEL ══════ -->
 <div id="agenda-panel" class="panel">
-  <div class="agenda-header">Sábado 28 Marzo</div>
-  <div class="agenda-sub">Pa'l Norte 2026 — La Dra. en VIP Tecate Light</div>
-  <img src="agenda.png" alt="Horarios oficiales" style="width:100%;border-radius:8px;margin-bottom:16px">
+  <div class="agenda-header">Lunes 6 Abril</div>
+  <div class="agenda-sub">Cita: Dr. Carlos Cisneros — Hospital Zambrano</div>
   <div id="agenda-list"></div>
 </div>
 
@@ -505,11 +504,12 @@ body {
   </div>
 
   <div class="care-card">
-    <h3>Servicios médicos</h3>
+    <h3>Segunda Opinión — Dr. Carlos Cisneros</h3>
     <ul>
-      <li>Hay cruces verdes marcadas en el mapa</li>
-      <li>La más cercana al VIP está en Zona Ascendente (centro del mapa)</li>
-      <li>Estudios médicos guardados en el cel por si emergencia</li>
+      <li>Cita: Lunes 6 Abril, 6:00 PM</li>
+      <li>Hospital Zambrano Hellion, Piso 3, Consultorio 7</li>
+      <li>El hospital cuenta con valet parking y rampas</li>
+      <li>Llevar silla de ruedas y reportes impresos</li>
     </ul>
   </div>
 
@@ -594,19 +594,10 @@ const POIS = [
 // AGENDA
 // ══════════════════════════════════════════
 const AGENDA = [
-  { time: '15:30', label: 'Salir de casa', detail: '', who: 'todos' },
-  { time: '16:00', label: 'Llegar + instalar a la Dra.', detail: 'E10 → Acceso 1 → VIP', who: 'todos' },
-  { time: '16:40', label: 'The Warning', detail: 'Tecate Light (16:40-17:30)', who: 'todos' },
-  { time: '17:30', label: 'Break', detail: 'Comida, hielo, agua', who: 'todos', isBreak: true },
-  { time: '18:00', label: 'The Whitest Boy Alive', detail: 'Acústico (18:00-18:50)', who: 'mexi' },
-  { time: '18:55', label: 'Simple Plan', detail: 'Tecate Original (18:55-20:00)', who: 'dra' },
-  { time: '19:35', label: 'Los Fabulosos Cadillacs', detail: 'Tecate Light (19:35-20:45)', who: 'todos' },
-  { time: '20:45', label: 'Break', detail: 'Hielo, pierna arriba, hidratación', who: 'todos', isBreak: true },
-  { time: '20:40', label: 'Turnstile', detail: 'Tecate Light (20:40-21:45)', who: 'todos' },
-  { time: '21:25', label: 'Kygo', detail: 'Tecate Light (21:25-22:35)', who: 'todos' },
-  { time: '22:25', label: 'Grupo Frontera', detail: 'Tecate Original (22:25-23:30)', who: 'mexi' },
-  { time: '23:25', label: 'Guns N\' Roses', detail: 'Tecate Light (23:25+)', who: 'todos' },
-  { time: '01:15', label: 'Salir', detail: '10 min antes del final → E10', who: 'todos' },
+  { time: '17:00', label: 'Salir de casa', detail: 'Preparar silla y estudios', who: 'todos' },
+  { time: '17:30', label: 'Llegar a Hospital Zambrano', detail: 'Piso 3, Consultorio 7', who: 'todos' },
+  { time: '18:00', label: 'Cita Dr. Carlos Cisneros', detail: 'Segunda opinión (Rodilla)', who: 'dra' },
+  { time: '19:00', label: 'Fin de cita', detail: 'Regreso a casa / Hielo', who: 'todos' },
 ];
 
 // ══════════════════════════════════════════
@@ -614,15 +605,13 @@ const AGENDA = [
 // ══════════════════════════════════════════
 const CHECKLIST_ITEMS = [
   'Silla de ruedas',
-  'Hielo / compresa fría',
-  'Botella de agua extra',
+  'Resultados de RM (en cel)',
+  'Resultados de US (en cel)',
+  'Preguntas para el doctor',
   'Cojín para la rodilla',
-  'Cargadores de cel',
-  'Cobija ligera',
-  'Estudios médicos en el cel',
-  'Boletos / pulseras',
-  'Efectivo / tarjeta',
-  'Bloqueador solar',
+  'Reporte PDF (impreso)',
+  'Hielo / compresa fría',
+  'Cargador de cel',
 ];
 
 // ══════════════════════════════════════════
