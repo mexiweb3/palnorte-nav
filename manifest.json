@@ -1,6 +1,6 @@
 {
-  "name": "Pa'l Norte Navigator",
-  "short_name": "PalNorte",
+  "name": "Dra. Navigator",
+  "short_name": "DraNav",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0a0a0a",
